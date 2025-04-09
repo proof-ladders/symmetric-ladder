@@ -1,0 +1,1445 @@
+\documentclass[11pt,letterpaper]{article}
+\usepackage[paper=letterpaper,margin=1in]{geometry}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% anything for PDF output that is compatible with standalone figures %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\usepackage{amsthm}
+
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{xspace}
+
+%%%%%%%%%
+% fonts %
+%%%%%%%%%
+
+\urlstyle{sf}
+\usepackage[T1]{fontenc}
+\usepackage{amssymb}
+\usepackage{libertine}
+%\usepackage{libertinus}
+\usepackage[libertine]{newtxmath}
+%\usepackage{libertinust1math}
+\usepackage[scaled=0.8]{beramono}
+
+\usepackage{microtype}
+
+%\usepackage{plex-serif}
+%\usepackage{plex-sans}
+%\usepackage{plex-mono}
+
+%\usepackage{heuristica}
+%\usepackage[heuristica,vvarbb,bigdelims]{newtxmath}
+
+%\usepackage{notomath}
+
+% copy-and-paste of ligatures
+% http://tex.stackexchange.com/questions/64188/what-are-good-ways-to-make-pdflatex-output-copy-and-pasteable
+\usepackage{cmap}
+
+%\newcommand{\lowersc}[1]{\textsc{\MakeLowercase{#1}}}
+\newcommand{\spacedsc}[1]{\textls*[50]{\textsc{\MakeLowercase{#1}}}}
+\newcommand{\spacedcaps}[1]{\textls*{\MakeUppercase{#1}}}
+\newcommand{\spacedsfsc}[1]{\textsf{\textls*[50]{\textsc{\MakeLowercase{#1}}}}}
+
+
+%%%%%%%%
+% math %
+%%%%%%%%
+
+\usepackage{amsmath}
+%\usepackage{amssymb}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%
+% colors / highlighting %
+%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\usepackage{xcolor}
+\usepackage{ifthen}
+
+\newlength{\myline}
+\setlength{\myline}{0.7pt} % pgf "thick"
+
+\colorlet{bg}{white}
+\colorlet{fg}{black}
+\colorlet{shaded}{black!10}
+\colorlet{shadeborder}{black!30}
+\definecolor{hlbg}{HTML}{F5F5A4} 
+\definecolor{hldarkbg}{HTML}{F5F5A4} 
+\definecolor{hlline}{HTML}{F5F5A4} 
+\colorlet{hlfg}{black}
+\colorlet{commentcolor}{black!60!white}
+\definecolor{errorcolor}{HTML}{a91616}
+\definecolor{linkcolor}{HTML}{4b804c}
+\definecolor{bitcolor}{HTML}{a91616}
+
+\pagecolor{bg}
+\color{fg}
+
+% https://tex.stackexchange.com/questions/545901/how-to-make-a-glowing-text
+% surrounding {}'s because otherwise the \contour and main text can be
+% misaligned in math mode
+\usepackage[auto,outline]{contour}
+
+\contourlength{1.2\myline}
+\newcommand{\hl}[1]{%
+    \relax\ifmmode%
+        {}%
+        \contour{hlbg}{\textcolor{hlfg}{${} #1 {}$}}%
+        {}%
+    \else%
+        \contour{hlbg}{\textcolor{hlfg}{#1}}%
+    \fi%
+}
+
+%%%%%%%%%%%%%%%
+%% shortcuts %%
+%%%%%%%%%%%%%%%
+
+\newcommand{\xor}{\textsc{xor}\xspace}
+
+\newcommand{\eg}{\textsl{e.g.}}
+\newcommand{\Eg}{\textsl{E.g.}}
+\newcommand{\ie}{\textsl{i.e.}}
+\newcommand{\Ie}{\textsl{I.e.}}
+\newcommand{\etc}{\textsl{etc}}
+
+\newcommand{\Damgard}{Damg{\aa}rd\xspace}
+
+%%%%%%%%%%%%%%%%%%%
+%% codebox stuff %%
+%%%%%%%%%%%%%%%%%%%
+
+\usepackage{varwidth}
+
+%\definecolor{boxbordercolor}{HTML}{000000}
+\colorlet{boxbordercolor}{fg!60!bg}
+\colorlet{boxtitlebgcolor}{fg!10!bg}
+\colorlet{boxbgcolor}{bg}
+
+\newcommand{\codebox}[2][]{%
+    \begin{varwidth}{\linewidth}%
+        \upshape%   no slant in definition/theorem statement!
+        #1%
+        \begin{tabbing}%
+            ~~~\=\quad\=\quad\=\quad\=\kill
+            #2
+        \end{tabbing}%
+    \end{varwidth}%
+}
+
+\newcommand{\fcodebox}[1]{%
+    \fboxsep=3pt%
+    \fcolorbox{boxbordercolor}{boxbgcolor}{\codebox[\small]{#1}}%
+}
+
+\newcommand{\titlecodebox}[2]{%
+    \fboxsep=0pt%
+    \fcolorbox{boxbordercolor}{boxtitlebgcolor}{%
+        \begin{varwidth}{\linewidth}%
+            \centering%
+            \fboxsep=3pt%
+            \colorbox{boxtitlebgcolor}{#1} \\
+            \colorbox{boxbgcolor}{\codebox[\small]{#2}}%
+        \end{varwidth}%
+    }%
+}
+
+\newcommand{\phantomtitlecodebox}[2]{%
+    \fboxsep=0pt%
+    \fcolorbox{boxbordercolor}{boxbgcolor}{%
+        \begin{varwidth}{\linewidth}%
+            \centering%
+            \fboxsep=3pt%
+            \colorbox{boxbgcolor}{\phantom{#1}} \\
+            \colorbox{boxbgcolor}{\codebox[\small]{#2}}%
+        \end{varwidth}%
+    }%
+}
+
+\newcommand{\hltitlecodebox}[2]{%
+    \fboxsep=3pt%
+    \colorbox{hlbg}{%
+        \titlecodebox{#1}{#2}%
+    }%
+}
+
+\newcommand{\hlcodebox}[1]{%
+    \fboxsep=3pt%
+    \colorbox{hlbg}{%
+        \fcodebox{#1}%
+    }%
+}
+
+\newcommand{\procheader}[1]{\underline{#1}}
+\newcommand{\mycomment}[1]{\textcolor{commentcolor}{\small\textsl{// #1}}}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%% mostly math stuff %%
+%%%%%%%%%%%%%%%%%%%%%%%
+
+
+% library stuff
+
+\renewcommand{\L}{\mathcal{L}}
+\newcommand{\lib}[1]{\mathcal{L}_{\textsf{\textup{#1}}}}
+\newcommand{\outputs}{\Rightarrow}
+\newcommand{\link}{\diamond}
+
+% bits
+
+\newcommand{\bit}[1]{\ensuremath{\textcolor{bitcolor}{\texttt{\upshape #1}}}\xspace}
+\newcommand{\bits}{\{\bit0,\bit1\}}
+
+\newcommand{\byte}[1]{%
+    \fboxsep=2pt%
+    \ensuremath{\fcolorbox{black!40}{gray!20}{\bit{#1}}}%
+}
+
+% operators
+
+\renewcommand{\le}{\leqslant}
+\renewcommand{\leq}{\leqslant}
+\renewcommand{\ge}{\geqslant}
+\renewcommand{\geq}{\geqslant}
+
+\newcommand{\pct}{\mathbin{\%}}
+\newcommand{\nmod}{n}
+\renewcommand{\pmod}{p}
+\newcommand{\qmod}{q}
+
+\newcommand{\qeq}{\overset{?}{=}}
+\newcommand{\qin}{\overset{?}{\in}}
+\newcommand{\defeq}{\overset{\scriptsize\textrm{def}}{=}}
+\newcommand{\defiff}{\overset{\scriptsize\textrm{def}}{\Leftrightarrow}}
+
+\newcommand{\indist}{\approxeq}
+
+\renewcommand{\gets}{\twoheadleftarrow}
+
+% special symbols
+
+\newcommand{\secpar}{\lambda}
+\newcommand{\A}{\mathcal{A}}
+\newcommand{\B}{\mathcal{B}}
+\newcommand{\C}{\mathcal{C}}
+\newcommand{\G}{\mathbb{G}}
+\newcommand{\K}{\mathcal{K}}
+\newcommand{\M}{\mathcal{M}}
+\newcommand{\N}{\mathcal{N}}
+\newcommand{\QR}{\mathbb{QR}}
+\newcommand{\T}{\mathcal{T}}
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\Z}{\mathbb{Z}}
+
+\newcommand{\myerr}  {\texttt{\upshape err}}
+\newcommand{\myundef}{\texttt{\upshape undef}}
+\newcommand{\mynull} {\texttt{\upshape null}}
+\newcommand{\mytrue} {\texttt{\upshape true}}
+\newcommand{\myfalse}{\texttt{\upshape false}}
+
+\newcommand{\ptxt}{M}
+\newcommand{\ctxt}{C}
+\newcommand{\key}{K}
+\newcommand{\seed}{S}
+\newcommand{\salt}{S}
+\newcommand{\nonce}{N}
+\newcommand{\ad}{A}
+
+%\renewcommand{\Pr}[1]{\text{Pr}\left[\,#1\,\right]}
+\newcommand{\PR}[1]{\Pr\bigl[\,#1\,\bigr]}
+
+\newcommand{\mat}[1]{\boldsymbol{#1}}
+
+% algorithms
+
+\newcommand{\algorithm}[1]{\ensuremath{\textsf{\upshape#1}}\xspace}
+
+\newcommand{\KeyGen}{\algorithm{KeyGen}}
+\newcommand{\Enc}{\algorithm{Enc}}
+\newcommand{\Encaps}{\algorithm{Encaps}}
+\newcommand{\Sign}{\algorithm{Sign}}
+\newcommand{\Dec}{\algorithm{Dec}}
+\newcommand{\Decaps}{\algorithm{Decaps}}
+\newcommand{\MAC}{\algorithm{MAC}}
+\newcommand{\Mac}{\algorithm{Mac}}
+\newcommand{\Verify}{\algorithm{Verify}}
+\newcommand{\Ver}{\algorithm{Ver}}
+\newcommand{\Share}{\algorithm{Share}}
+\newcommand{\Reconstruct}{\algorithm{Reconstruct}}
+\newcommand{\Filter}{\algorithm{Filter}}
+\newcommand{\Birthday}{\algorithm{Birthday}}
+\newcommand{\Start}{\algorithm{Start}}
+\newcommand{\Respond}{\algorithm{Respond}}
+\newcommand{\Finalize}{\algorithm{Finalize}}
+\newcommand{\RSA}{\algorithm{RSA}}
+\newcommand{\Commit}{\algorithm{Commit}}
+\renewcommand{\Check}{\algorithm{Check}}
+\newcommand{\Extract}{\algorithm{Extract}}
+\newcommand{\SimTrans}{\algorithm{SimTranscript}}
+
+\newcommand{\subname}[1]{\textsc{#1}}
+
+\newcommand{\otpenc}{\subname{otp.enc}}
+\newcommand{\otsenc}{\subname{ots.enc}}
+\newcommand{\ssshare}{\subname{ss.share}}
+\newcommand{\bdaysamp}{\subname{bday.samp}}
+\newcommand{\prgsamp}{\subname{prg.sample}}
+\newcommand{\prfquery}{\subname{prf.query}}
+\newcommand{\macguess}{\subname{mac.guess}}
+\newcommand{\macreveal}{\subname{mac.reveal}}
+\newcommand{\prpquery}{\subname{prp.query}}
+\newcommand{\sprpquery}{\subname{sprp.query}^+}
+\newcommand{\sprpinvquery}{\subname{sprp.query}^-}
+\newcommand{\cpaenc}{\subname{cpa.enc}}
+\newcommand{\ccaenc}{\subname{cca.enc}}
+\newcommand{\ccadec}{\subname{cca.dec}}
+\newcommand{\aeenc}{\subname{ae.enc}}
+\newcommand{\aedec}{\subname{ae.dec}}
+\newcommand{\aeadenc}{\subname{aead.enc}}
+\newcommand{\aeaddec}{\subname{aead.dec}}
+\newcommand{\crhfgetsalt}{\subname{crhf.getsalt}}
+\newcommand{\crhfcmp}{\subname{crhf.compare}}
+\newcommand{\uhfcmp}{\subname{uhf.compare}}
+
+\newcommand{\rsapk}{\subname{rsa.pk}}
+\newcommand{\rsachallenge}{\subname{rsa.challenge}}
+\newcommand{\rsacheck}{\subname{rsa.check}}
+\newcommand{\sigpk}{\subname{sig.pk}}
+\newcommand{\sigsign}{\subname{sig.sign}}
+\newcommand{\sigver}{\subname{sig.ver}}
+\newcommand{\cpapk}{\subname{cpa.pk}}
+\newcommand{\ccapk}{\subname{cca.pk}}
+\newcommand{\cpaonepk}{\subname{1cpa.pk}}
+\newcommand{\ccaonepk}{\subname{1cca.pk}}
+\newcommand{\cpaoneenc}{\subname{1cpa.enc}}
+\newcommand{\ccaoneenc}{\subname{1cca.enc}}
+\newcommand{\ccaonedec}{\subname{1cca.dec}}
+\newcommand{\ratchadvance}{\subname{ratch.advance}}
+\newcommand{\ratchcompromise}{\subname{ratch.compromise}}
+\newcommand{\schnorrtrans}{\subname{schnorr.transcript}}
+\newcommand{\hvzktrans}{\subname{hvzk.transcript}}
+
+\newcommand{\varname}[1]{\textsf{#1}}
+
+\newcommand{\badvar}{\varname{bad}}
+\newcommand{\prftable}{L}
+\newcommand{\prpinvtable}{L^{-1}}
+\newcommand{\iptable}{P}
+
+\newcommand{\ro}{\mathbb{H}}
+\newcommand{\rotable}{H}
+\newcommand{\ic}{\mathbb{F}}
+
+\newcommand{\pk}{PK}
+\newcommand{\sk}{SK}
+\newcommand{\PK}{PK}
+\newcommand{\SK}{SK}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% anything for PDF output that is incompatible with standalone figures %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% this wasn't compatible with figures??
+\usepackage{mathtools}\mathtoolsset{centercolon}
+
+\usepackage{tabulary}
+
+%QU ligature in smallcaps breaks letter spacing
+\DisableLigatures[q]{ shape = sc* }
+
+
+% allow align environment to span pagebreaks
+\allowdisplaybreaks
+
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{claim}[theorem]{Claim}
+
+
+\newcommand{\important}[1]{
+    \begin{center}
+        \framebox{%
+            \begin{minipage}{0.9\linewidth}%
+                \em%
+                \mbox{}\llap{$\star$\quad}%
+                #1
+            \end{minipage}
+        }
+    \end{center}
+}
+
+\newcommand{\namedref}[2]{\hyperref[#2]{#1~\ref*{#2}}}
+\newcommand{\chapterref}[1]{\namedref{Chapter}{#1}}
+\newcommand{\sectionref}[1]{\namedref{Section}{#1}}
+\newcommand{\theoremref}[1]{\namedref{Theorem}{#1}}
+\newcommand{\constructionref}[1]{\namedref{Construction}{#1}}
+\newcommand{\definitionref}[1]{\namedref{Definition}{#1}}
+\newcommand{\lemmaref}[1]{\namedref{Lemma}{#1}}
+\newcommand{\claimref}[1]{\namedref{Claim}{#1}}
+\newcommand{\exerciseref}[1]{\namedref{Exercise}{#1}}
+\newcommand{\exampleref}[1]{\namedref{Example}{#1}}
+\newcommand{\factref}[1]{\namedref{Fact}{#1}}
+
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=false,
+%    linkcolor=linkcolor,
+%    citecolor=linkcolor,
+%    urlcolor=linkcolor,
+    hidelinks,
+    hypertexnames=false
+}
+% 'hypertexnames=false' makes hyperrefs work even when there are 
+% duplicate chapter/section numbers (e.g. chapter 1 and chapter A)
+
+
+
+\newcommand{\includefig}[1]{%
+    \raisebox{-0.5\totalheight}{\includegraphics{../../build/#1.bw.pdf}}}
+
+
+
+%%%%%%%%%%%%%
+
+
+\newcommand{\hybproof}[1]{\input{build/#1.hyb.tex}}
+
+% use the first of these options that is < \linewidth:
+% 1. first argument as given
+% 2. first argument with \small
+% 3. second argument
+\newsavebox{\toowidebox}
+\newsavebox{\toowideboxtwo}
+\newcommand{\iftoowide}[2]{%
+    \begin{lrbox}{\toowidebox}
+        \begin{minipage}{\linewidth} % need minipage inside of lrbox
+        #1
+        \end{minipage}
+    \end{lrbox}%
+    \begin{lrbox}{\toowideboxtwo}
+        \begin{minipage}{\linewidth} % need minipage inside of lrbox
+        \small%
+        #1
+        \end{minipage}
+    \end{lrbox}%
+    \ifdim \wd\toowidebox>\linewidth
+        \ifdim \wd\toowideboxtwo>\linewidth
+            #2
+        \else
+            \small
+            #1
+        \fi
+    \else
+        #1
+    \fi
+}
+
+% allow align environment to span pagebreaks
+\allowdisplaybreaks
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%% embarrassing hacks %%
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+% someone somewhere is resetting \L
+
+\renewcommand{\L}{\mathcal{L}}
+
+% misc:
+\usepackage{nicefrac}
+
+
+
+\begin{document}
+
+
+\title{Security Proofs in the Style of \emph{The Joy of Cryptography}}
+\author{Mike Rosulek}
+\maketitle
+
+
+\paragraph{Overview:}
+
+This document contains various security proofs excerpted from (the forthcoming new edition of) \emph{The Joy of Cryptography} \cite{joyofcryptography}.
+In the textbook I take a unified, game-based approach to provable security.
+Thus, I hope that the examples are understandable to cryptographers who are comfortable with the game-based styles of Shoup \cite{EPRINT:Shoup04} and Bellare \& Rogaway \cite{EC:BelRog06}.
+However, beware that there are some important differences in my approach, the most important of which is the following:
+\begin{quote}
+        Every security definition is phrased as the indistinguishability of two games (which I call \emph{libraries}).
+        It is important that there are 2 \emph{separate} games, each written explicitly; not a single game where the adversary's goal is to guess a secret bit.
+        Even ``unforgeability''-style definitions are written in this way.
+\end{quote}
+This principle has two important consequences:
+\begin{itemize}
+    \item 
+        The goal of a security proof is to show that two particular games, say, $\L_1$ and $\L_2$, are indistinguishable.
+        Starting from the code $\L_1$, a security proof consists of a sequence of small modifications to its code, eventually culminating in the code of $\L_2$, where each step is justified to have only negligible effect on an adversary.
+
+    \item
+        When a security proof uses the security of an underlying primitive (\eg, when using a secure PRF to construct a CPA-secure encryption), there is no need to switch into the contrapositive mindset (\eg, if $\A$ breaks CPA security, then there is an $\A'$ that breaks the PRF).
+        This fact and its merit are best illustrated by example, in the following sections.
+\end{itemize}
+I write $\L_1 \indist \L_2$ to mean that two libraries are indistinguishable (no polynomial-time adversary can distinguish with better than negligible advantage), and $\L_1 \equiv \L_2$ to mean that the two have identical external behavior (perfectly indistinguishable).%
+\footnote{The interpretation of $\L_1 \indist \L_2$ is asymptotic, but is straightforward to adapt these proofs to a concrete style by accounting for the advantage that accumulates in the sequence of games.}
+Other conventions are introduced below, as needed.
+
+%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%
+\section{PRG Length Extension}
+
+
+%\paragraph{Concepts illustrated:}
+%\begin{itemize}
+%    \item The 3-hop maneuver, discussed below.
+%    \item Independence of uniformly sampled bits. \Ie, uniformly sampling an $n$-bit is identical to concatenating $n$ uniformly and independently sampled bits.
+%\end{itemize}
+
+\begin{claim}
+    If  $G$ is a secure length-doubling PRG, then the following function $H$ is also a secure PRG:
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    \codebox{
+    \procheader{$H(\seed)$:}\\
+    \> $A \| B := G(\seed)$\\
+    \> $C \| D := G(B)$\\
+    \> return $A \| C \| D$
+    }
+    $\quad$
+    \includefig{prg/prg-feedback}
+\end{varwidth}    \end{center}
+    Each of the variables $A$, $B$, $C$, $D$ are $\secpar$ bits long.
+    Thus, ``$A\|B := G(\seed)$'' means: assign the first $\secpar$ bits of $G(\seed)$ to $A$ and the other $\secpar$ bits to $B$.
+
+    In other words,
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    if $\quad$
+    \titlecodebox{$\lib{prg-real}^G$}{
+    \procheader{$\prgsamp_G(\,)$:}\\
+    \> $\seed \gets \bits^\secpar$\\
+    \> return $G(\seed)$
+    }
+    $\indist$
+    \titlecodebox{$\lib{prg-rand}^G$}{
+    \procheader{$\prgsamp_G(\,)$:}\\
+    \> $Y \gets \bits^{2\secpar}$\\
+    \> return $Y$
+    }
+    $\quad$ then $\quad$
+    \titlecodebox{$\lib{prg-real}^H$}{
+    \procheader{$\prgsamp_H(\,)$:}\\
+    \> $\seed \gets \bits^\secpar$\\
+    \> \mycomment{$H(\seed)$:}\\
+    \> $A \| B := G(\seed)$\\
+    \> $C \| D := G(B)$\\
+    \> return $A \| C \| D$
+    }
+    $\indist$
+    \titlecodebox{$\lib{prg-rand}^H$}{
+    \procheader{$\prgsamp_H(\,)$:}\\
+    \> $Y \gets \bits^{3\secpar}$\\
+    \> return $Y$
+    }
+\end{varwidth}    \end{center}
+\end{claim}
+
+\begin{proof}
+\hybproof{prg-feedback}
+\end{proof}
+
+\subsection{Discussion}
+
+\paragraph{Concept: The 3-Hop Maneuever Idiom}
+
+The following standard sequence of 3 steps appears in essentially every security proof in my methodology:
+\begin{enumerate}
+    \item \textbf{Factor Out:} 
+        Factor out some lines of code from the current game into a separate sub-game.
+        This changes only the internal organizatio of the game, so it has no effect on the adversary (calling program).
+        Call the new sub-game $\L_1$.
+
+    \item \textbf{Swap:}
+        Swap $\L_1$ with a different library $\L_2$.
+        Thus, $\L_1 \indist \L_2$ must be an agreed-upon assumption or a lemma already proven.
+
+    \item \textbf{Inline:}
+        Inline $\L_2$ into the main game.
+        Again, this change has no effect on the adversary (calling program).
+\end{enumerate}
+I call this standard idiom the \textbf{3-hop maneuver}.
+The preceding proof uses it twice, with $(\L_1, \L_2) = (\lib{prg-real}^G, \lib{prg-rand}^G)$.
+
+
+\bigskip
+
+The 3-hop maneuver is how \emph{reductions} appear in my methodology.
+Suppose we want to argue that hybrids $\lib{hyb-$i$}$ and $\lib{hyb-$(i+1)$}$ are indistinguishable, because of some assumption $P$.
+\begin{itemize}
+    \item \textbf{Traditional, contrapositive, reduction-centered approach:}
+        given any $\A$ that distinguishes $\lib{hyb-$i$}$ from $\lib{hyb-$(i+1)$}$, construct an $\A'$ that breaks $P$.
+
+    \item \textbf{Direct-implication approach focused on game-rewriting:}
+        Assumption $P$ is expressed as the indistinguishability of two libraries, say, $\lib{P-1}$ and $\lib{P-2}$.
+        Thus, we directly prove that
+        \[
+            \lib{hyb-$i$} \equiv \mathcal{R} \link \lib{P-1} \indist \mathcal{R} \link \lib{P-2} \equiv \lib{hyb-$(i+1)$}
+        \]
+\end{itemize}
+Of course, the reduction still exists, even if it is not the center of attention.
+If $\A$ distinguishes $\lib{hyb-$i$}$ from $\lib{hyb-$(i+1)$}$, then $\mathcal{R} \link \A$ breaks $P$.
+
+
+
+%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%
+\section{PRF Cascade}
+
+
+
+
+\begin{claim}
+    If $F$ is a secure PRF with input/output length $\secpar$, then the following function $H$ (also with input/output length $\secpar$) is also a secure PRF:
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    \codebox{
+    \procheader{$H\bigl(\key_1 \| \key_2, X\bigr)$:}\\
+    \> $Y := F(\key_1, X)$\\
+    \> return $F(\key_2, Y)$
+    }
+\end{varwidth}    \end{center}
+In other words,
+\begin{center}
+\begin{varwidth}{\linewidth}
+    if $\quad$
+    \titlecodebox{$\lib{prf-real}^F$}{
+    $\key \gets \bits^\secpar$\\[8pt]
+    \procheader{$\prfquery_F(X)$:}\\
+    \> return $F(\key,X)$
+    }
+    $\indist$
+    \titlecodebox{$\lib{prf-rand}^F$}{
+    \procheader{$\prfquery_F(X)$:}\\
+    \> if $\prftable[X]$ undefined:\\
+    \> \> $\prftable[X] \gets \bits^\secpar$\\
+    \> return $\prftable[X]$
+    }
+    $\quad$ then $\quad$
+    \titlecodebox{$\lib{prf-real}^H$}{
+    $\key_1 \| \key_2 \gets \bits^{2\secpar}$\\[8pt]
+    \procheader{$\prfquery_H(X)$:}\\
+    \> \mycomment{return $H(\key_1 \| \key_2, X)$}\\
+    \> $Y := F(\key_1, X)$\\
+    \> return $F(\key_2, Y)$
+    }
+    $\indist$
+    \titlecodebox{$\lib{prf-rand}^H$}{
+    \procheader{$\prfquery_H(X)$:}\\
+    \> if $\prftable[X]$ undefined:\\
+    \> \> $\prftable[X] \gets \bits^\secpar$\\
+    \> return $\prftable[X]$
+    }
+    $.$
+\end{varwidth}\end{center}
+\end{claim}
+
+\paragraph{Convention:}
+In these libraries, $\key$, $\key_1$, $\key_2$ are initialized at the beginning of time and are global/static to their library.
+Similarly, $\prftable[\cdot]$ is global/static dictionary (associative array) data struture, and initially undefined everywhere.
+
+\begin{proof}
+    \hybproof{prf-compose}
+\end{proof}
+
+\subsection{Discussion}
+
+
+\paragraph{Concept: Statefulness.}
+The PRF security definition is inherently stateful.
+Both libraries have persistent state ($\key$ in the case of $\lib{prf-real}$ and the dictionary $\prftable[\cdot]$ in $\lib{prf-rand}$).
+
+
+\paragraph{Concept: Lazy random dictionary.}
+I call the  ``ideal PRF'' a \emph{lazy random dictionary.}
+Whenever a PRF is used in a security proof, expect a lot of reasoning about lazy random dictionaries, especially regarding whether certain entries are defined.
+
+
+\paragraph{Concept: birthday bound and simple bad events.}
+The proof used the following fact, which can be seen as a formalization of the birthday bound in terms of indistinguishable libraries.
+
+\begin{lemma}
+    The following libraries are indistinguishable:
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    \titlecodebox{$\lib{samp-rand}$}{
+    \procheader{$\subname{bday.samp}(\,)$:}\\
+    \> $R \gets \bits^\secpar$\\
+    \> return $R$
+    }
+    $\indist$
+    \titlecodebox{$\lib{samp-uniq}$}{
+    \procheader{$\subname{bday.samp}(\,)$:}\\
+    \> $R \gets \bits^\secpar \setminus \mathcal{R}$\\
+    \> $\mathcal{R} := \mathcal{R} \cup \{R\}$\\
+    \> return $R$
+    }
+\end{varwidth}    \end{center}
+\end{lemma}
+
+The lemma can be proven using the standard bad event technique.
+The idea that ``uniformly sampled values don't repeat'' is common in security proofs.
+Thus, there is value in enshrining the preceding lemma.
+When applying this birthday lemma, the use of bad events is abstracted away, and does not appear in  main flow of the proof.
+
+In later examples, however, bad event reasoning is more subtle and more specialized to the proof at hand, and thus there is less to be gained by explicitly abstracting a lemma about two libraries.
+
+
+\paragraph{Bonus:}
+The same construction is secure when using key schedule $\key_1 = \key_2$.
+The proof requires more sophisticated bad event reasoning.
+
+
+
+
+
+\section{The GGM Construction}
+
+\begin{claim}
+    If $G$ is a secure length-doubling PRG, then the GGM construction (below) is a secure PRF.
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    \codebox{
+    \procheader{$F(\key,X)$:}\\
+    \> $R := \key$\\
+    \> for $i = 1$ to $n$: \mycomment{$n = |X|$}\\
+    \> \> $S_0 \| S_1 := G(R)$\\
+    \> \> $R := S_{X[i]}$\\
+    \> return $R$
+    }
+    $\quad$
+    \includefig{prf/ggm}
+\end{varwidth}    \end{center}
+    In other words,
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    if $\quad$
+    \titlecodebox{$\lib{prg-real}^G$}{
+    \procheader{$\prgsamp(\,)$:}\\
+    \> $\seed \gets \bits^\secpar$\\
+    \> return $G(\seed)$
+    }
+    $\indist$
+    \titlecodebox{$\lib{prg-rand}^G$}{
+    \procheader{$\prgsamp(\,)$:}\\
+    \> $Y \gets \bits^{2\secpar}$\\
+    \> return $Y$
+    }
+    $\quad$ then $\quad$
+    \titlecodebox{$\lib{prf-real}^F$}{
+    $\key \gets \bits^\secpar$\\[8pt]
+    \procheader{$\prfquery(X)$:}\\
+    \> \mycomment{return $F(\key,X)$}\\
+    \> $R := \key$\\
+    \> for $i = 1$ to $n$:\\
+    \> \> $S_0 \| S_1 := G(R)$\\
+    \> \> $R := S_{X[i]}$\\
+    \> return $R$
+    }
+    $\indist$
+    \titlecodebox{$\lib{prf-rand}^F$}{
+    \procheader{$\prfquery(X)$:}\\
+    \> if $\prftable[X]$ undefined:\\
+    \> \> $\prftable[X] \gets \bits^\secpar$\\
+    \> return $\prftable[X]$
+    }
+\end{varwidth}    \end{center}
+\end{claim}
+
+\begin{proof}
+    The number of hybrids in the proof depends on the input-length parameter $n$.
+    Define the following hybrid library $\L_h$, where $h \in \{0, \ldots, n\}$ is a fixed parameter:
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    \titlecodebox{$\L_{h}$}{
+    \procheader{$\prfquery(X)$:}\\
+    \> $P := \text{first } h \text{ bits of } X$\\[8pt]
+    \> if $\prftable[P]$ undefined:\\
+    \> \> $\prftable[P] \gets \bits^\secpar$\\[8pt]
+    \> $R := \prftable[P]$\\
+    \> for $i = h+1$ to $n$:\\
+    \> \> $S_0 \| S_1 := G(R)$\\
+    \> \> $R := S_{X[i]}$\\
+    \> return $R$
+    }
+    $\quad$
+    \includefig{prf/ggm-hybrid}
+\end{varwidth}    \end{center}
+    It suffices to show that \hl{$\L_{i-1} \indist \L_i$} for all $i \in \{1,\ldots, n\}$, because $\L_0 \equiv \lib{prf-real}^F$ and $\L_n \equiv \lib{prf-rand}^F$.
+
+\hybproof{ggm}
+\end{proof}
+
+
+
+
+
+\section{(2-block) CBC-MAC}
+
+\begin{claim}
+    If $F$ is a secure PRF with input/output length $\secpar$, then 2-block CBC-MAC (below) is also a secure PRF.
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    \codebox{
+    \procheader{$F^2_{\textsf{cbc}}(\key, X_1 \| X_2)$:}\\
+    \> $Y_1 := F(\key,X_1)$\\
+    \> $Y_2 := F(\key,Y_1 \oplus X_2)$\\
+    \> return $Y_2$
+    }
+    $\qquad$
+    \includefig{prf/cbc-mac2}
+\end{varwidth}    \end{center}
+    In other words,
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    if $\quad$
+    \titlecodebox{$\lib{prf-real}^F$}{
+    $\key \gets \bits^\secpar$\\[8pt]
+    \procheader{$\prfquery_F(X)$:}\\
+    \> return $F(\key,X)$
+    }
+    $\indist$
+    \titlecodebox{$\lib{prf-rand}^F$}{
+    \procheader{$\prfquery_F(X)$:}\\
+    \> if $\prftable[X]$ undefined:\\
+    \> \> $\prftable[X] \gets \bits^\secpar$\\
+    \> return $\prftable[X]$
+    }
+    $\quad$ then $\quad$
+    \titlecodebox{$\lib{prf-real}^{\textsf{cbc-2}}$}{
+    $\key \gets \bits^\secpar$\\[8pt]
+    \procheader{$\prfquery_{\textsf{cbc-2}}(X_1 \| X_2)$:}\\
+    \> \mycomment{return $F_{\textsf{cbc}}^2(\key,X)$}\\
+    \> $Y_1 := F(\key,X_1)$\\
+    \> $Y_2 := F(\key,Y_1 \oplus X_2)$\\
+    \> return $Y_2$
+    }
+    $\indist$
+    \titlecodebox{$\lib{prf-rand}^{\textsf{cbc-2}}$}{
+    \procheader{$\prfquery_{\textsf{cbc-2}}(X_1 \| X_2)$:}\\
+    \> if $\prftable[X_1 \| X_2]$ undefined:\\
+    \> \> $\prftable[X_1 \| X_2] \gets \bits^\secpar$\\
+    \> return $\prftable[X_1 \| X_2]$
+    }
+\end{varwidth}    \end{center}
+\end{claim}
+
+
+\begin{proof}
+\hybproof{cbc-mac}
+
+    The final library is $\lib{prf-rand}^{\textsf{cbc-2}}$, along with some extra steps that happen at the end of time, which don't affect the adversary's view (the bad event flag is entirely internal to the library).
+    The purpose of moving the bad event to the end of time is to make the analysis of its probability simpler.
+    Now, values in $R[\cdot]$ are sampled \emph{after} all $X_1, X_2$ values have been chosen.
+    It is not hard to show that the bad event has probability at most $q^2 / 2^{\secpar+1}$, but deriving this bound is not the purpose of this document.
+    Since the bad event has negligible probability, the step of the proof that invoked the bad event technique was justified.
+\end{proof}
+
+\subsection{Discussion}
+
+\paragraph{Concept: end-of-time strategy for bad events.}
+It would be possible to analyze the bad event's probability at the moment it is invoked in the proof.
+Instead, I have chosen to keep the bad event around until the end of the proof and analyze its probability only in the final hybrid.
+The reason for doing this is mainly pedagogical.
+These libraries sample values of the form $R[\cdot]$, and even give some of these values to the adversary, while the adversary adaptively chooses values of $X_1$ and $X_2$.
+The bad event is triggered based on a complicated condition of these $R[\cdot]$ values and $X_1$, $X_2$.
+It is tricky to fully understand which values are influenced by others.
+By moving as much as possible to the end of time --- and in particular, after the adversary has finished choosing its inputs to $\prfquery$ --- it becomes clear which values are independent of the adversarially chosen ones.
+While someone with a PhD in cryptography may be able to conclude (correctly) which values are distributed independently of the adversary's view in the penultimate 3 hybrids, the end-of-time strategy is more accessible and less error-prone.
+
+
+\paragraph{Concept: the Golden Rule of PRFs.}
+In \emph{The Joy of Cryptography,} the Golden Rule of PRFs is:
+\begin{quote}
+    If a PRF $F$ is being used as a component in a larger construction $H$, then security usually rests on how well $H$ can ensure \emph{distinct} inputs to $F$.
+\end{quote}
+This rule manifests in the preceding example in the following step:
+\begin{center}
+\begin{varwidth}{\linewidth}
+    \fcodebox{
+    $\cdots$\\
+    if $R[Y_1 \oplus X_2]$ undefined:\\
+    \> $R[Y_1 \oplus X_2] \gets \bits^\secpar$\\
+    $\cdots$
+    }
+    $\leadsto$
+    \fcodebox{
+    $\cdots$\\
+    if $R[Y_1 \oplus X_2]$ defined: $\badvar := \mytrue$\\
+    $R[Y_1 \oplus X_2] \gets \bits^\secpar$\\
+    $\cdots$
+    }
+\end{varwidth}\end{center}
+The bad event corresponds precisely to the event that the PRF input (now an index of the lazy random dictionary) $Y_1 \oplus X_2$ repeats.
+The reasoning of this step of the proof is that we expect such a repeat to be unlikely (indeed, by introducing a bad event, we are now obligated to prove that the bad event has negligible probability), so we can modify the library's behavior to act as if such a repeat never happens.
+In other words, we make the line ``$R[Y_1 \oplus X_2] \gets \bits^\secpar$'' unconditional.
+
+
+Note that CBC-MAC involves 2 calls to the PRF, and the Golden Rule applies only to the second one.
+\Ie, we do \textbf{not} make the following change:
+\begin{center}
+\begin{varwidth}{\linewidth}
+    \fcodebox{
+    $\cdots$\\
+    if $R[X_1]$ undefined:\\
+    \> $R[X_1] \gets \bits^\secpar$\\
+    $\cdots$
+    }
+    $\not\leadsto$
+    \fcodebox{
+    $\cdots$\\
+    if $R[X_1]$ defined: $\badvar := \mytrue$\\
+    $R[X_1] \gets \bits^\secpar$\\
+    $\cdots$
+    }
+\end{varwidth}\end{center}
+This is because in CBC-MAC it is easy to force a repeated input to this first PRF call, by invoking CBC-MAC on inputs with a repeated first block.
+We \emph{do} expect inputs to the first PRF call to repeat, but not inputs to the second PRF call, and security rests only on the latter.
+
+Essentially every proof involving PRFs features this idiom, where we ``unconditionalize'' a lazy random dictionary assignment and introduce a bad event.
+
+
+%% \section{Luby-Rackoff}
+%% 
+%% \hybproof{luby-rackoff}
+
+\section{Encrypt-then-MAC}
+
+\begin{claim}
+If $\Sigma_e$ is a CPA-secure symmetric-key encryption scheme
+    and $\Sigma_m$ is a secure MAC with $\Sigma_e.\C \subseteq \Sigma_m.\M$ (\ie, ciphertexts from $\Sigma_e$ are suitable inputs to $\Sigma_m$),
+    then encrypt-then-MAC (below) is a CCA-secure symmetric-key encryption scheme:
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    \codebox{
+    \procheader{$\Enc\bigl( \key_e\|\key_m, \ptxt \bigr)$:}\\
+    \> $\ctxt' := \Sigma_e.\Enc(\key_e, \ptxt)$\\
+    \> $T := \Sigma_m.\Mac(\key_m, \ctxt)$\\
+    \> return $(\ctxt,T)$
+    }
+    $\quad$
+    \codebox{
+    \procheader{$\Dec\bigl( \key_e\|\key_m, (\ctxt',T) \bigr)$:}\\
+    \> if $\Sigma_m.\Ver(\key_m, \ctxt', T)$:\\
+    \> \> return $\Sigma_e.\Dec(\key_e, \ctxt')$\\
+    \> else: return $\bot$
+    }
+\end{varwidth}    \end{center}
+    In other words,
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    if $\quad$
+    \titlecodebox{$\lib{cpa-left}^{\Sigma_e}$}{
+    $\key \gets \bits^\secpar$\\[8pt]
+    \procheader{$\cpaenc(\ptxt_L, \ptxt_R)$:}\\
+    \> return $\Sigma_e.\Enc(\key, \hl{\ptxt_L})$
+    }
+    $\indist$
+    \titlecodebox{$\lib{cpa-right}^{\Sigma_e}$}{
+    $\key \gets \bits^\secpar$\\[8pt]
+    \procheader{$\cpaenc(\ptxt_L, \ptxt_R)$:}\\
+    \> return $\Sigma_e.\Enc(\key, \hl{\ptxt_R})$
+    }
+\end{varwidth}
+\begin{varwidth}{\linewidth}
+    and $\quad$
+    \titlecodebox{$\lib{mac-real}^{\Sigma_m}$}{
+    $\key \gets \bits^\secpar$\\[8pt]
+    \procheader{$\subname{mac.mac}(\ptxt)$:}\\
+    \> return $\Sigma_m.\Mac(\key,\ptxt)$\\[8pt]
+    \procheader{$\subname{mac.ver}(\ptxt,T)$:}\\
+    \> return $\Sigma_m.\Ver(\key,\ptxt,T)$
+    }
+    $\indist$
+    \titlecodebox{$\lib{mac-fake}^{\Sigma_m}$}{
+    $\key \gets \bits^\secpar$\\[8pt]
+    \procheader{$\subname{mac.mac}(\ptxt)$:}\\
+    \> $T := \Sigma_m.\Mac(\key,\ptxt)$\\
+    \> $\mathcal{T} := \mathcal{T} \cup \{ (\ptxt,T) \}$\\
+    \> return $T$\\[8pt]
+    \procheader{$\subname{mac.ver}(\ptxt,T)$:}\\
+    \> return $[(\ptxt,T) \in \mathcal{T}]?$
+    }
+\end{varwidth}
+\begin{varwidth}{\linewidth}
+    then $\quad$
+    \titlecodebox{$\lib{cca-left}$}{
+    $\key_e \| \key_m \gets \bits^{2\secpar}$\\[8pt]
+    \procheader{$\ccaenc(\ptxt_L, \ptxt_R)$:}\\
+    \> $\ctxt' := \Sigma_e.\Enc(\key_e, \hl{\ptxt_L})$\\
+    \> $T := \Sigma_m.\Mac(\key_m, \ctxt')$\\
+    \> $\ctxt := (\ctxt', T)$\\
+    \> $\mathcal{D} := \mathcal{D} \cup \{ \ctxt \}$\\
+    \> return $\ctxt$\\[8pt]
+    \procheader{$\ccadec(\ctxt)$:}\\
+    \> if $\ctxt \in \mathcal{D}$: return $\bot$\\
+    \> $(\ctxt', T) := \ctxt$\\
+    \> if $\Sigma_m.\Ver(\key_m,\ctxt',T)$:\\
+    \> \> return $\Sigma_e.\Dec(\key_e,\ctxt')$\\
+    \> else: return $\bot$
+    }
+    $\indist$
+    \titlecodebox{$\lib{cca-right}$}{
+    $\key_e \| \key_m \gets \bits^{2\secpar}$\\[8pt]
+    \procheader{$\ccaenc(\ptxt_L, \ptxt_R)$:}\\
+    \> $\ctxt' := \Sigma_e.\Enc(\key_e, \hl{\ptxt_R})$\\
+    \> $T := \Sigma_m.\Mac(\key_m, \ctxt')$\\
+    \> $\ctxt := (\ctxt', T)$\\
+    \> $\mathcal{D} := \mathcal{D} \cup \{ \ctxt \}$\\
+    \> return $\ctxt$\\[8pt]
+    \procheader{$\ccadec(\ctxt)$:}\\
+    \> if $\ctxt \in \mathcal{D}$: return $\bot$\\
+    \> $(\ctxt', T) := \ctxt$\\
+    \> if $\Sigma_m.\Ver(\key_m,\ctxt',T)$:\\
+    \> \> return $\Sigma_e.\Dec(\key_e,\ctxt')$\\
+    \> else: return $\bot$
+    }
+\end{varwidth}    \end{center}
+\end{claim}
+
+
+\begin{proof}
+\hybproof{enc-then-mac}
+\end{proof}
+
+\subsection{Discussion}
+
+\paragraph{Concept: authenticity properties.}
+Even security for MACs is defined in terms of two indistinguishable libraries.
+Specifically, the definition is:
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    \titlecodebox{$\lib{mac-real}^{\Sigma_m}$}{
+    $\key \gets \bits^\secpar$\\[8pt]
+    \procheader{$\subname{mac.mac}(\ptxt)$:}\\
+    \> return $\Sigma_m.\Mac(\key,\ptxt)$\\[8pt]
+    \procheader{$\subname{mac.ver}(\ptxt,T)$:}\\
+    \> return $\Sigma_m.\Ver(\key,\ptxt,T)$
+    }
+    $\indist$
+    \titlecodebox{$\lib{mac-fake}^{\Sigma_m}$}{
+    $\key \gets \bits^\secpar$\\[8pt]
+    \procheader{$\subname{mac.mac}(\ptxt)$:}\\
+    \> $T := \Sigma_m.\Mac(\key,\ptxt)$\\
+    \> $\mathcal{T} := \mathcal{T} \cup \{ (\ptxt,T) \}$\\
+    \> return $T$\\[8pt]
+    \procheader{$\subname{mac.ver}(\ptxt,T)$:}\\
+    \> return $[(\ptxt,T) \in \mathcal{T}]?$
+    }
+\end{varwidth}    \end{center}
+    The two libraries behave differently \emph{only} if $\subname{mac.ver}$ is called with $(\ptxt,T)$ such that $\Ver(\key,\ptxt,T)=\mytrue$ (so that $\lib{mac-real}$ returns $\mytrue$) but $(\ptxt,T) \not\in \mathcal{T}$ (so that $\lib{mac-fake}$ returns $\myfalse$).
+    --- in other words, only when $\subname{mac.ver}$ is called with a \emph{forgery.}
+    Thus, the libraries are indistinguishable if and only if it is hard to construct a forgery.
+
+
+
+
+%%% \section{Hash-then-PRF}
+%%% 
+%%% \begin{lemma}
+%%% If 
+%%% \end{lemma}
+%%% 
+%%% \hybproof{hash-then-prf}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\section{Simple Random-Oracle PRF}
+
+\begin{claim}
+    The function $F(\key,X) = \ro(\key \| X)$ is a secure PRF if $\ro$ is modeled as a random oracle.
+    In other words, the following libraries are indistinguishable:
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    \titlecodebox{$\lib{prf-real+ro}$}{
+    $\key \gets \bits^\secpar$\\[8pt]
+    \procheader{$\prfquery(X)$:}\\
+    \> \mycomment{$F(\key,X) = \ro(\key\|X)$}\\
+    \> return $\ro(\key \| X)$\\[8pt]
+    \procheader{$\ro(A)$:}\\
+    \> if $\rotable[A]$ undefined:\\
+    \> \> $\rotable[A] \gets \bits^n$\\
+    \> return $\rotable[A]$
+    }
+    $\indist$
+    \titlecodebox{$\lib{prf-rand+ro}$}{
+    \procheader{$\prfquery(X)$:}\\
+    \> if $\prftable[X]$ undefined:\\
+    \> \> $\prftable[X] \gets \bits^n$\\
+    \> return $\prftable[X]$\\[8pt]
+    \procheader{$\ro(A)$:}\\
+    \> if $\rotable[A]$ undefined:\\
+    \> \> $\rotable[A] \gets \bits^n$\\
+    \> return $\rotable[A]$
+    }
+\end{varwidth}    \end{center}
+\end{claim}
+
+\begin{proof}
+\hybproof{ro-prf}
+    The final library is our desired target $\lib{prf-rand+ro}$, with some extra logic to determine a bad event at the end of time.
+    We complete the proof by showing that the bad event has negligible probability.
+    Since $\key$ is sampled uniformly, \emph{after} $\mathcal{A}$ has been determined, the bad event has probability $|\mathcal{A}|/2^\secpar$, which is negligible since $|\mathcal{A}|$ is polynomial in the security parameter.
+\end{proof}
+
+\subsection{Discussion}
+
+\paragraph{Concept: random oracles.}
+We model a random oracle as a lazy random dictionary, which is accessible to the adversary directly as well as to the construction.
+
+\paragraph{Concept: partitioning.}
+In the random oracle model, the adversary makes \emph{direct} queries to the random oracle, while the construction makes its own \emph{internal} queries.
+Most security proofs in the random oracle rely on the fact that there is no overlap between these two sets of queries --- \ie, the adversary never manages to directly make an internal query.
+
+This concept manifests in security proofs by partitioning the random oracle's storage according to the direct-vs-internal classification. 
+In the preceding example, we introduced a hybrid that stored direct queries and internal queries in separate data structures.
+
+
+%% \section{Even-Mansour}
+%% 
+%% \hybproof{even-mansour}
+
+
+
+
+%% \section{One implies Many PKE}
+%% 
+%% \hybproof{one-many-pke}
+
+
+
+
+%\section{Fujisaki-Okamoto}
+%
+%\begin{claim}
+%    If $\Sigma$ is a CPA-secure
+%\end{claim}
+%
+%\hybproof{fo}
+
+
+
+
+
+
+
+
+\section{RSA-KEM CCA}
+
+\begin{claim}
+    If the RSA assumption holds, then RSA-KEM (below) is a (IND\$-)CCA-secure KEM in the random oracle model.
+    Without loss of generality, it suffices to prove security of a KEM with respect to a \emph{single} challenge ciphertext.
+\begin{center}
+\begin{varwidth}{\linewidth}
+    \codebox{
+    \procheader{$\Encaps(\pk = (\nmod,e))$:}\\
+    \> $R \gets \Z_\nmod$\\
+    \> $\ctxt := R^e \pct \nmod$\\
+    \> $\ptxt := \ro(R)$\\
+    \> return $(\ctxt, \ptxt)$
+    }
+    \quad
+    \codebox{
+    \procheader{$\Decaps(\sk = (\nmod,d), \ctxt)$:}\\
+    \> $R := \ctxt^d \pct \nmod$\\
+    \> return $\ro(R)$
+    }
+\end{varwidth}\end{center}
+    In other words,
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    if $\quad$
+    \titlecodebox{$\lib{rsa-real}$}{
+    $(\nmod,e,d) := \RSA.\KeyGen()$\\
+    $Y \gets \Z_\nmod$\\[8pt]
+    \procheader{$\rsachallenge(\,)$:}\\
+    \> return $(\nmod,e,Y)$\\[8pt]
+    \procheader{$\rsacheck(X)$:}\\
+    \> return $Y \equiv_\nmod X^e$
+    }
+    $\indist$
+    \titlecodebox{$\lib{rsa-fake}$}{
+    $(\nmod,e,d) := \RSA.\KeyGen()$\\
+    $Y \gets \Z_\nmod$\\[8pt]
+    \procheader{$\rsachallenge(\,)$:}\\
+    \> return $(\nmod,e,Y)$\\[8pt]
+    \procheader{$\rsacheck(X)$:}\\
+    \> return $\myfalse$
+    }
+\end{varwidth}
+\begin{varwidth}{\linewidth}
+    then $\quad$
+    \titlecodebox{$\lib{kem-1cca-real+ro}$}{
+    $(\nmod,e,d) := \RSA.\KeyGen()$\\
+    $\pk := (\nmod,e)$\\[8pt]
+    \mycomment{$(\ctxt^*,\ptxt^*) := \Encaps(\pk)$:}\\
+    $R^* \gets \Z_\nmod$\\
+    $\ctxt^* := (R^*)^e \pct \nmod$\\
+    $\ptxt^* := \ro(R^*)$\\[8pt]
+    \procheader{$\ccaonepk(\,)$:}\\
+    \> return $\pk$\\[8pt]
+    \procheader{$\ccaoneenc(\,)$:}\\
+    \> return $(\ctxt^*, \ptxt^*)$\\[8pt]
+    \procheader{$\ccaonedec(\ctxt)$:}\\
+    \> \mycomment{$\Decaps(\ctxt)$:}\\
+    \> return $\ro(\ctxt^d \pct \nmod)$\\[8pt]
+    \procheader{$\ro(A)$:}\\
+    \> if $\rotable[A]$ undefined:\\
+    \> \> $\rotable[A] \gets \bits^\secpar$\\
+    \> return $\rotable[A]$
+    }
+    $\indist$
+    \titlecodebox{$\lib{kem-1cca-rand+ro}$}{
+    $(\nmod,e,d) := \RSA.\KeyGen()$\\
+    $\pk := (\nmod,e)$\\[8pt]
+    $\ctxt^* \gets \Z_\nmod$\\
+    $\ptxt^* \gets \bits^\secpar$\\[8pt]
+    \procheader{$\ccaonepk(\,)$:}\\
+    \> return $\pk$\\[8pt]
+    \procheader{$\ccaoneenc(\,)$:}\\
+    \> return $(\ctxt^*, \ptxt^*)$\\[8pt]
+    \procheader{$\ccaonedec(\ctxt)$:}\\
+    \> if $\ctxt == \ctxt^*$: return $\ptxt^*$\\
+    \> return $\ro(\ctxt^d \pct \nmod)$\\[8pt]
+    \procheader{$\ro(A)$:}\\
+    \> if $\rotable[A]$ undefined:\\
+    \> \> $\rotable[A] \gets \bits^\secpar$\\
+    \> return $\rotable[A]$
+    }
+\end{varwidth}    \end{center}
+\end{claim}
+
+\begin{proof}
+\hybproof{rsa-kem}
+\end{proof}
+
+\subsection{Discussion}
+
+\paragraph{Defining CCA security.}
+The standard approach for defining CCA security is for the decryption oracle to return $\bot$ if it is queried with a challenge ciphertext (\ie, a ciphertext generated by the library/game itself).
+My preference for both symmetric-key and public-key encryption, which I have followed in this section's example, is to instead allow the decryption oracle to return the ``expected'' plaintext, for example (SKE):
+\begin{center}
+\begin{varwidth}{\linewidth}
+    \titlecodebox{$\lib{cca-real}$}{
+    $\key \gets \bits^\secpar$\\[8pt]
+    \procheader{$\ccaenc(\ptxt)$:}\\
+    \> return $\Enc(\key,\ptxt)$\\[8pt]
+    \procheader{$\ccadec(\ctxt)$:}\\
+    \> return $\Dec(\key,\ctxt)$
+    }
+    $\indist$
+    \titlecodebox{$\lib{cca-ideal}$}{
+    $\key \gets \bits^\secpar$\\[8pt]
+    \procheader{$\ccaenc(\ptxt)$:}\\
+    \> $\ctxt \gets \C(|\ptxt|)$\\
+    \> $\mathcal{D}[\ctxt] := \ptxt$\\
+    \> return $\ctxt$\\[8pt]
+    \procheader{$\ccadec(\ctxt)$:}\\
+    \> if $\mathcal{D}[\ctxt]$ defined:\\
+    \> \> return $\mathcal{D}[\ctxt]$\\
+    \> return $\Dec(\key,\ctxt)$
+    }
+\end{varwidth}\end{center}
+Thus, the ``real'' library provides completely \emph{unrestricted} access to a decryption oracle, while the ``ideal'' library remembers the association between challenge ciphertexts and their plaintexts, so that the decryption oracle can ``lie'' convincingly.
+This is a completely stylistic choice, and not a mandatory requirement for the library-based approach.
+Furthermore, both flavors of CCA security definition are equivalent, because the set of challenge ciphertexts is public knowledge (and thus the knowledge of whether the decryption oracle is being called with a challenge ciphertext), as is the value of their corresponding challenge plaintexts.
+
+
+
+
+
+\section{RSA-PSS}
+
+\subsection{Random Self-Reduction for RSA}
+
+
+\begin{lemma}
+    \label{rsa-self-reduce}
+If a single-challenge RSA assumption holds, then a multi-challenge variant also holds.
+In other words,
+\begin{center}
+\begin{varwidth}{\linewidth}
+    if $\quad$
+    \titlecodebox{$\lib{rsa-real}$}{
+    $(\nmod,e,d) := \RSA.\KeyGen()$\\
+    $Y \gets \Z_\nmod$\\[8pt]
+    \procheader{$\rsachallenge(\,)$:}\\
+    \> return $(\nmod,e,Y)$\\[8pt]
+    \procheader{$\rsacheck(X)$:}\\
+    \> return $Y \equiv_\nmod X^e$
+    }
+    $\indist$
+    \titlecodebox{$\lib{rsa-fake}$}{
+    $(\nmod,e,d) := \RSA.\KeyGen()$\\
+    $Y \gets \Z_\nmod$\\[8pt]
+    \procheader{$\rsachallenge(\,)$:}\\
+    \> return $(\nmod,e,Y)$\\[8pt]
+    \procheader{$\rsacheck(X)$:}\\
+    \> return $\myfalse$
+    }
+\end{varwidth}\begin{varwidth}{\linewidth}
+    then $\quad$
+    \titlecodebox{$\lib{rsa*-real}$}{
+    $(\nmod,e,d) := \RSA.\KeyGen()$\\[8pt]
+    \procheader{$\rsapk^*(\,)$:}\\
+    \> return $(\nmod,e)$\\[8pt]
+    \procheader{$\rsachallenge^*(\,)$:}\\
+    \> $Y \gets \Z_\nmod$\\
+    \> $\mathcal{Y} := \mathcal{Y} \cup \{Y\}$\\
+    \> return $Y$\\[8pt]
+    \mycomment{is $X$ the $e$-th root of any $Y \in \mathcal{Y}$?}\\
+    \procheader{$\rsacheck^*(X)$:}\\
+    \> if $X^e \pct \nmod \in \mathcal{Y}$: return $\mytrue$\\
+    \> else: return $\myfalse$
+    }
+    $\indist$
+    \titlecodebox{$\lib{rsa*-fake}$}{
+    $(\nmod,e,d) := \RSA.\KeyGen()$\\[8pt]
+    \procheader{$\rsapk^*(\,)$:}\\
+    \> return $(\nmod,e)$\\[8pt]
+    \procheader{$\rsachallenge^*(\,)$:}\\
+    \> $Y \gets \Z_\nmod$\\
+    \> return $Y$\\[8pt]
+    \mycomment{is $X$ the $e$-th root of any $Y \in \mathcal{Y}$?}\\
+    \procheader{$\rsacheck^*(X)$:}\\
+    \> return $\myfalse$
+    }
+\end{varwidth}\end{center}
+\end{lemma}
+
+\begin{proof}
+\hybproof{rsa-self-reduce}
+\end{proof}
+
+
+
+\subsection{RSA-PSS}
+
+
+\begin{claim}
+If the RSA assumption is true, then RSA-PSS (below) is a secure digital signature scheme in the random oracle model.
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    \codebox{
+    \procheader{$\Sign( \sk=(\nmod,d), \ptxt )$:}\\
+    \> $R \gets \bits^\secpar$\\
+    \> $S := \ro(\ptxt \| R)^d \pct \nmod$\\
+    \> return $(R,S)$
+    }
+    \quad
+    \codebox{
+    \procheader{$\Verify( \pk=(\nmod,e), \ptxt, (R,S) )$:}\\
+    \> return $\ro(\ptxt \| R) == S^e \pct \nmod$
+    }
+\end{varwidth}    \end{center}
+    In other words,
+    \begin{center}
+\begin{varwidth}{\linewidth}
+    if $\quad$
+    \titlecodebox{$\lib{rsa-real}$}{
+    $(\nmod,e,d) := \RSA.\KeyGen()$\\
+    $Y \gets \Z_\nmod$\\[8pt]
+    \procheader{$\rsachallenge(\,)$:}\\
+    \> return $(\nmod,e,Y)$\\[8pt]
+    \procheader{$\rsacheck(X)$:}\\
+    \> return $Y \equiv_\nmod X^e$
+    }
+    $\indist$
+    \titlecodebox{$\lib{rsa-fake}$}{
+    $(\nmod,e,d) := \RSA.\KeyGen()$\\
+    $Y \gets \Z_\nmod$\\[8pt]
+    \procheader{$\rsachallenge(\,)$:}\\
+    \> return $(\nmod,e,Y)$\\[8pt]
+    \procheader{$\rsacheck(X)$:}\\
+    \> return $\myfalse$
+    }
+\end{varwidth}
+\begin{varwidth}{\linewidth}
+    then $\quad$
+    \titlecodebox{$\lib{sig-real+ro}$}{
+    $(\nmod,e,d) := \RSA.\KeyGen()$\\[8pt]
+    \procheader{$\sigpk(\,)$:}\\
+    \> return $(\nmod,e)$\\[8pt]
+    \procheader{$\sigsign(\ptxt)$:}\\
+    \> \mycomment{$\Sign(\sk,\ptxt)$:}\\
+    \> $R \gets \bits^\secpar$\\
+    \> $S := \ro(\ptxt\|R)^d \pct \nmod$\\
+    \> return $(R,S)$\\[8pt]
+    \procheader{$\sigver(\ptxt,(R,S))$:}\\
+    \> \mycomment{$\Verify(\pk,\ptxt,(R,S))$:}\\
+    \> $Y := \ro(\ptxt\|R)$\\
+    \> return $Y == S^e \pct \nmod$\\[8pt]
+    \procheader{$\ro(A)$:}\\
+    \> if $\rotable[A]$ undefined:\\
+    \> \> $\rotable[A] \gets \Z_\nmod$\\
+    \> return $\rotable[A]$
+    }
+    $\indist$
+    \titlecodebox{$\lib{sig-fake}$}{
+    $(\nmod,e,d) := \RSA.\KeyGen()$\\[8pt]
+    \procheader{$\sigpk(\,)$:}\\
+    \> return $(\nmod,e)$\\[8pt]
+    \procheader{$\sigsign(\ptxt)$:}\\
+    \> $R \gets \bits^\secpar$\\
+    \> $S := \ro(\ptxt\|R)^d \pct \nmod$\\
+    \> $\mathcal{S} := \mathcal{S} \cup \{ (\ptxt,R,S) \}$\\
+    \> return $(R,S)$\\[8pt]
+    \procheader{$\sigver(\ptxt,(R,S))$:}\\
+    \> if $(\ptxt,R,S) \in \mathcal{S}$: return $\mytrue$\\
+    \> return $\myfalse$\\[8pt]
+    \procheader{$\ro(A)$:}\\
+    \> if $\rotable[A]$ undefined:\\
+    \> \> $\rotable[A] \gets \Z_\nmod$\\
+    \> return $\rotable[A]$
+    }
+\end{varwidth}    \end{center}
+\end{claim}
+
+
+\begin{proof}
+\hybproof{rsa-pss}
+\end{proof}
+
+
+
+
+
+
+
+\bibliographystyle{alpha}
+\bibliography{bib,../../book/bib,../../cryptobib/abbrev1,../../cryptobib/crypto}
+
+
+\end{document}
