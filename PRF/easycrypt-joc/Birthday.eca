@@ -1,0 +1,278 @@
+(* ------------------------------------------------------- *)
+(* General theory computing Birthday probabilities *)
+(* ------------------------------------------------------- *)
+
+(* TODO: do induction on the dlist not on the while loop *)
+
+require import AllCore StdBigop.
+require import FSet List.
+require import Distr DList.
+require (*  *) Mu_mem.
+(*   *) import Bigreal.BRM.
+
+(* ------------------------------------------------------- *)
+(* Theory Parameters *)
+(* ------------------------------------------------------- *)
+
+(* A type `t`, equipped with a uniform, lossless distribution `dt` *)
+type t.
+op [uniform lossless] dt : t distr.
+
+(* Sampling `q` values and checking if there was a collision *)
+module Sample = {
+  proc list(q) = {
+    var l;
+
+    l <$ dlist dt q;
+    return ! uniq l;
+  }
+
+  proc loop(q) = {
+    var t, i, bad, seen;
+
+    bad <- false;
+    seen <- fset0;
+    i <- 0;
+    while (i < q) {
+      t <$ dt;
+      if (t \in seen) {
+        bad <- true;
+      }
+      seen <- seen `|` fset1 t;
+      i <- i + 1;
+    }
+    return bad;
+  }
+}.
+
+(* ------------------------------------------------------- *)
+
+section SampleEquivalences.
+
+(* DList: sample list <=> sample items transformation *)
+local clone Program as ListProg with
+  type t <- t,
+  op d <- dt.
+
+(* Equivalence of the two styles of birthday bound computation *)
+lemma list_loop_equiv: equiv[Sample.list ~ Sample.loop: ={arg} ==> ={res}].
+proof.
+proc.
+(* Switch to sampling the list by element *)
+outline {1} ^l<$ ~ ListProg.Sample.sample.
+rewrite equiv [{1} ^l<@ ListProg.Sample_Loop_eq].
+inline.
+(* Eliminate the trivial case of q < 0 *)
+case (0 <= q{1}); last first.
++ rcondf {1} ^while; 1: by auto => /#.
+  rcondf {2} ^while; 1: by auto => /#.
+  by auto.
+(* Show equivalence between uniqueness of l0 and bad not being set *)
+wp; while (
+  ={i, q} /\ (uniq l0{1} <=> !bad{2}) /\ (forall x, x \in l0{1} <=> x \in seen{2})
+  /\ ((!bad <=> card seen = i) /\ (0 <= card seen <= i)){2}
+  /\ (n = q /\ (size l0 = i) /\ 0 <= i <= q){1}).
++ auto => />.
+  smt(in_fsetU1 fcardU1).
+auto => />.
+smt(in_fset0 fcards0).
+qed.
+
+lemma list_loop_eq P Q &m1 &m2: Pr[Sample.list(Q) @ &m1 : P res] = Pr[Sample.loop(Q) @ &m2 : P res].
+proof. by byequiv list_loop_equiv. qed.
+
+end section SampleEquivalences.
+
+(* ------------------------------------------------------- *)
+
+section ProbabilityCalculation.
+
+local module S = {
+  var seen : t fset
+
+  proc loop_early_bad(q) = {
+    var t, i, bad;
+
+    bad <- false;
+    seen <- fset0;
+    i <- 0;
+    while (i < q /\ !bad) {
+      t <$ dt;
+      if (t \in seen) {
+        bad <- true;
+      }
+      seen <- seen `|` fset1 t;
+      i <- i + 1;
+    }
+    return bad;
+  }
+  
+  proc loop_early_bad_split(q) = {
+    var t, bad;
+
+    bad <@ loop_early_bad(q - 1);
+    if (!bad) {
+      t <$ dt;
+      if (t \in seen) {
+        bad <- true;
+      }
+      seen <- seen `|` fset1 t;
+    }
+    return bad;
+  }
+}.
+
+local lemma loop_early_bad_equiv: equiv[Sample.loop ~ S.loop_early_bad: ={arg} ==> ={res}].
+proof.
+proc.
+case (0 <= q{1}); last first.
++ rcondf {1} ^while; 1: by auto => /#.
+  rcondf {2} ^while; 1: by auto => /#.
+  by auto.
+splitwhile {1} ^while : (!bad).
+seq ^while ^while : (={i, q, bad} /\ seen{1} = S.seen{2} /\ 0 <= i{2} <= q{2} /\ (i = q \/ bad){2}).
++ while (={i, q, bad} /\ seen{1} = S.seen{2} /\ (0 <= i <= q){2}).
+  + by auto => /#.
+  by auto => /#.
+case (bad{2}).
++ while {1} (={bad} /\ bad{2}) (q{1} - i{1}).
+  + move => &m z.
+    auto => />.
+    by rewrite dt_ll /#.
+  by auto => /#.
+rcondf {1} ^while; 1: by auto => /#.
+by auto.
+qed.
+
+local lemma loop_early_bad_eq P Q &m1 &m2:
+  Pr[Sample.loop(Q) @ &m1 : P res] = Pr[S.loop_early_bad(Q) @ &m2 : P res].
+proof. by byequiv loop_early_bad_equiv. qed.
+
+local lemma loop_early_bad_split_equiv: equiv[S.loop_early_bad ~ S.loop_early_bad_split: ={arg} ==> ={res}].
+proof.
+proc; inline.
+case (1 <= q{1}); last first.
++ rcondf {1} ^while; 1: by auto => /#.
+  rcondf {2} ^while; 1: by auto => /#.
+  rcondt {2} ^if; 1: by auto => /#.
+  auto => />.
+  move => &2 _ t _.
+  by rewrite in_fset0.
+splitwhile {1} ^while : (i < q - 1).
+seq ^while ^while : (={i, q, S.seen} /\ 1 <= q{1} /\ (i = q{1} - 1 \/ bad){1} /\ bad{1} = bad0{2}).
++ while (={i, S.seen} /\ 1 <= q{1} /\ q{1} - 1 = q0{2} /\ bad{1} = bad0{2} /\ (0 <= i <= q - 1){1}).
+  + by auto => /#.
+  by auto => /#.
+case (bad{1}).
++ rcondf {1} ^while; 1: by auto => /#.
+  rcondf {2} ^if; 1: by auto => /#.
+  by auto.
+rcondt {1} ^while; 1: by auto => /#.
+rcondf {1} ^while; 1: by auto => /#.
+rcondt {2} ^if; 1: by auto => /#.
+by sim.
+qed.
+
+local lemma loop_early_bad_split_eq P Q &m1 &m2:
+  Pr[S.loop_early_bad(Q) @ &m1 : P res] = Pr[S.loop_early_bad_split(Q) @ &m2 : P res].
+proof. by byequiv loop_early_bad_split_equiv. qed.
+
+local lemma distinct_card_pr &m Q: 0 <= Q => Pr[S.loop_early_bad(Q) @ &m : !res] = Pr[S.loop_early_bad(Q) @ &m : card S.seen = Q].
+proof.
+move => ge0_Q.
+byequiv => //.
+proc.
+while (={i, q, bad, S.seen} /\ (!bad <=> card S.seen = i){1} /\ (0 <= card S.seen <= i){1} /\ (0 <= i <= Q){1} /\ (q = Q){1}).
++ auto => />.
+  smt(fcardU1).
+auto => />.
+smt(fcards0).
+qed.
+
+local lemma distinct_pr &m Q: Pr[S.loop_early_bad(Q) @ &m : !res] = bigi predT (fun j => 1%r - j%r / (size (Finite.to_seq (support dt)))%r) 1 Q.
+proof.
+elim/natind: Q.
++ move => n n_le0.
+  rewrite range_geq.
+  + smt().
+  rewrite big_nil.
+  byphoare (: arg = n ==> !res) => //.
+  proc.
+  rcondf ^while; auto => />.
+  by rewrite -lezNgt.
+move => n ge0_n H.
+case (n = 0).
++ move => n_eq_0.
+  rewrite range_geq.
+  + smt().
+  rewrite big_nil.
+  byphoare (: arg = n + 1 ==> !res) => //.
+  proc.
+  rcondt ^while; 1: by auto => /#.
+  rcondf ^while; 1: by auto => /#.
+  auto => />.
+  rewrite dt_ll /=.
+  move => v _ _.
+  by rewrite in_fset0.
+move => n_neq_0.
+rewrite (big_cat_int n).
++ smt().  
++ smt().
+rewrite -H big_int1 (loop_early_bad_split_eq [!] _ _ &m).
+byphoare (_: q = n + 1 ==> _) => //=.
+proc.
+seq ^ <@ :
+  (card S.seen = n)
+  (Pr[S.loop_early_bad(n) @ &m : card S.seen = n]) (1%r - n%r / (size (Finite.to_seq (support dt)))%r)
+  _ 0%r
+  ((forall x, x \in S.seen => x \in dt) /\ q = n + 1 /\ (!bad <=> card S.seen = n) /\ (0 <= card S.seen <= n)).
++ inline; wp.
+  while ((forall x, x \in S.seen => x \in dt) /\ q = n + 1 /\ q0 = n /\ (!bad0 <=> card S.seen = i) /\ (0 <= card S.seen <= i) /\ (0 <= i <= n)).
+  + auto => />.
+    smt(in_fsetU1 fcardU1).
+  auto => />.
+  smt(in_fset0 fcards0).
++ call (: arg = n ==> card S.seen = n) => //.
+  bypr => &m0 ->.
+  byequiv => //.
+  by sim />.
++ rcondt ^if; 1: by auto => /#.
+  wp.
+  rnd (predC (mem S.seen)).
+  skip => />.
+  move => &hr seen_in_dt _ _ _.
+  rewrite mu_not dt_ll /=.
+  rewrite (Mu_mem.mu_mem _ _ (1%r / (size (Finite.to_seq (support dt)))%r)).
+  + move => x /seen_in_dt x_in_dt.
+    by rewrite (mu1_uni _ _ dt_uni) x_in_dt dt_ll.
+  smt().
++ hoare.
+  rcondf ^if; 1: by auto => /#.
+  by auto => /#.
+move => &hr q_eq.
+by rewrite distinct_card_pr.
+qed.
+
+(* ------------------------------------------------------- *)
+(* The Main Results *)
+(* ------------------------------------------------------- *)
+
+(* Probability of sampling a unique list *)
+lemma Distinct Q &m: Pr[Sample.list(Q) @ &m : !res] = bigi predT (fun j => 1%r - j%r / (size (Finite.to_seq (support dt)))%r) 1 Q.
+proof.
+rewrite -(distinct_pr &m Q).
+rewrite -(loop_early_bad_eq [!] _ &m _) /=.
+by rewrite -(list_loop_eq [!] _ &m _).
+qed.
+
+(* Probability of sampling a non-unique list *)
+lemma Collision Q &m: Pr[Sample.list(Q) @ &m : res] = 1%r - bigi predT (fun j => 1%r - j%r / (size (Finite.to_seq (support dt)))%r) 1 Q.
+proof.
+rewrite -(Distinct Q &m).
+rewrite Pr[mu_not].
+have -> : Pr[Sample.list(Q) @ &m : true] = 1%r.
++ by byphoare => //; islossless.
+by ring.
+qed.
+
+end section ProbabilityCalculation.

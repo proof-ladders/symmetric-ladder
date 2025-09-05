@@ -1,0 +1,141 @@
+(* ------------------------------------------------------- *)
+(* General theory for security of PRFs *)
+(* ------------------------------------------------------- *)
+require import Libraries.
+require import AllCore FMap.
+
+(* ------------------------------------------------------- *)
+(* Theory Parameters *)
+(* ------------------------------------------------------- *)
+
+(* The type of the PRF key *)
+type key.
+(* The input type *)
+type t_in.
+(* The output type *)
+type t_out.
+
+(* Distribution for the keys *)
+op d_key : key distr.
+(* Distribution for producing output values *)
+op d_out : t_out distr.
+
+(* ------------------------------------------------------- *)
+(* Library Types *)
+(* ------------------------------------------------------- *)
+
+(* The actual PRF *)
+module type F = {
+  proc run(_: key * t_in) : t_out
+}.
+
+(* 
+  The oracle API that an adversary will be 
+  able to interact with.
+*)
+module type API = {
+  proc query(_: t_in) : t_out
+}.
+
+module type Lib = {
+  include LibBase
+  include API
+}.
+
+module type Adv (L : API) = { include LibAdv }.
+
+module LibAdv (A : Adv) (L : Lib) : LibAdv = {
+  include CompBase(A(L), L)
+  include A(L) [-init, fin]
+}.
+
+(* ------------------------------------------------------- *)
+(* Indistinguishability libraries for PRFs *)
+(* ------------------------------------------------------- *)
+
+module PRF_real (F : F) : Lib = {
+  var k : key
+
+  proc init() = {
+    k <$ d_key;
+  }
+
+  proc fin() = {}
+
+  proc query(x) = {
+    var t : t_out;
+
+    t <@ F.run(k, x);
+    return t;
+  }
+}.
+
+module PRF_rand (F : F) : Lib = {
+  var l : (t_in, t_out) fmap
+
+  proc init() = {
+    l <- empty;
+  }
+
+  proc fin() = {}
+
+  proc query(x) = {
+    var t : t_out;
+
+    if (l.[x] = None) {
+      t <$ d_out;
+      l.[x] <- t;
+    }
+    return oget l.[x];
+  }
+}.
+
+(* ------------------------------------------------------- *)
+(* Useful Library Wrappers *)
+(* ------------------------------------------------------- *)
+
+(* Add counting to a library *)
+module Count (L : Lib) : Lib = {
+  var cq : int
+
+  proc init() = {
+    L.init();
+    cq <- 0;
+  }
+
+  proc fin = L.fin
+
+  proc query(x) = {
+    var r : t_out;
+
+    cq <- cq + 1;
+    r <@ L.query(x);
+    return r;
+  }
+}.
+
+
+(* ------------------------------------------------------- *)
+(* Soundness of the Count wrapper *)
+(* ------------------------------------------------------- *)
+section Counting.
+
+declare module L <: Lib { -Count.cq }.
+declare module A <: Adv{ -Count.cq, -L }.
+
+equiv Counting_equiv:
+  Game(LibAdv(A, L)).main ~ Game(LibAdv(A, Count(L))).main:
+   ={glob A, glob L}
+  ==>
+   ={res, glob A, glob L}.
+proof.
+proc; inline.
+sim (: ={glob L}).
+by proc*; inline; sim.
+qed.
+
+lemma Counting_pr &m:
+  Pr[Game(LibAdv(A, L)).main() @ &m : res] = Pr[Game(LibAdv(A, Count(L))).main() @ &m : res].
+proof. by byequiv Counting_equiv. qed.
+
+end section Counting.

@@ -1,0 +1,131 @@
+(* ------------------------------------------------------- *)
+(* General theory for security of pseudorandom generators *)
+(* ------------------------------------------------------- *)
+require import Libraries.
+require import AllCore. 
+
+(* ------------------------------------------------------- *)
+(* Theory Parameters *)
+(* ------------------------------------------------------- *)
+
+(* The input type *)
+type t_in.
+(* The output type *)
+type t_out.
+
+(* Distribution for producing input values *)
+op d_in : t_in distr.
+(* Distribution for producing output values *)
+op d_out : t_out distr.
+
+(* ------------------------------------------------------- *)
+(* Library Types *)
+(* ------------------------------------------------------- *)
+
+(* The actual PRG *)
+module type G = {
+  proc run(_: t_in) : t_out
+}.
+
+(* 
+  The oracle API that an adversary will be 
+  able to interact with.
+*)
+module type API = {
+  proc sample() : t_out
+}.
+
+module type Lib = {
+  include LibBase
+  include API
+}.
+
+module type Adv (L : API) = { include LibAdv }.
+
+module LibAdv (A : Adv) (L : Lib) : LibAdv = {
+  include CompBase(A(L), L)
+  include A(L) [-init, fin]
+}.
+
+(* ------------------------------------------------------- *)
+(* Indistinguishability libraries for PRGs *)
+(* ------------------------------------------------------- *)
+
+module PRG_real (G : G) : Lib = {
+  proc init() = {}
+
+  proc fin() = {}
+
+  proc sample() = {
+    var s : t_in;
+    var t : t_out;
+    
+    s <$ d_in;
+    t <@ G.run(s);
+    return t;
+  }
+}.
+
+module PRG_rand (G : G) : Lib = {
+  proc init() = {}
+
+  proc fin() = {}
+
+  proc sample() = {
+    var t : t_out;
+
+    t <$ d_out;
+    return t;
+  }
+}.
+
+(* ------------------------------------------------------- *)
+(* Useful Library Wrappers *)
+(* ------------------------------------------------------- *)
+
+(* Add counting to a library *)
+module Count (L : Lib) : Lib = {
+  var cs : int
+
+  proc init() = {
+    L.init();
+    cs <- 0;
+  }
+
+  proc fin() = {
+    L.fin();
+  }
+
+  proc sample() = {
+    var t : t_out;
+
+    cs <- cs + 1;
+    t <@ L.sample();
+    return t;
+  }
+}.
+
+(* ------------------------------------------------------- *)
+(* Soundness of the Count wrapper *)
+(* ------------------------------------------------------- *)
+section Counting.
+
+declare module L <: Lib { -Count.cs }.
+declare module A <: Adv { -L, -Count.cs }.
+
+equiv Counting_equiv:
+  Game(LibAdv(A, L)).main ~ Game(LibAdv(A, Count(L))).main:
+   ={glob A, glob L}
+  ==>
+   ={res, glob A, glob L}.
+proof. 
+proc; inline.
+sim (: ={glob L}).
+by proc*; inline; sim.
+qed.
+
+lemma Counting_pr &m:
+  Pr[Game(LibAdv(A, L)).main() @ &m : res] = Pr[Game(LibAdv(A, Count(L))).main() @ &m : res].
+proof. by byequiv Counting_equiv. qed.
+
+end section Counting.

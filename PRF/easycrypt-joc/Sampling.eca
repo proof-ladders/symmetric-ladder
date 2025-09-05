@@ -1,0 +1,1025 @@
+(* ------------------------------------------------------- *)
+(* General theory for applying the Birthday bound *)
+(* ------------------------------------------------------- *)
+require import Libraries.
+
+require import AllCore FSet FMap Distr Dexcepted FelTactic.
+require (*  *) Mu_mem PROM Cache Birthday.
+(*   *) import StdOrder.RealOrder StdBigop.
+
+(* ------------------------------------------------------- *)
+(* Theory Parameters *)
+(* ------------------------------------------------------- *)
+
+(*
+  This is used for bounding the maximum number of adversary 
+  calls to the `sample` oracle in the API.
+*)
+op max_samples : { int | 0 <= max_samples } as ge0_ms.
+
+(* The base type *)
+type t.
+
+(*
+  The distribution we are sampling from.
+  This must be lossless.
+*)
+op [lossless] dt : t distr.
+
+(* ------------------------------------------------------- *)
+(* Library Types *)
+(* ------------------------------------------------------- *)
+
+(* 
+  The oracle API that an adversary will be 
+  able to interact with.
+*)
+module type API = {
+  proc sample() : t
+}.
+
+module type Lib = {
+  include LibBase
+  include API
+}.
+
+module type Adv (L : API) = {
+  include LibAdv
+}.
+
+module LibAdv (A : Adv) (L : Lib) : LibAdv = {
+  include CompBase(A(L), L)
+  include A(L) [-init, fin]
+}.
+
+(* ------------------------------------------------------- *)
+(* Indistinguishability Libraries for the Birthday Bound *)
+(* ------------------------------------------------------- *)
+
+module BDAY_rand : Lib = {
+  proc init() = {}
+
+  proc fin() = {}
+
+  proc sample() = {
+    var r : t;
+
+    r <$ dt;
+    return r;
+  }
+}.
+
+module BDAY_uniq : Lib = {
+  var s : t fset
+
+  proc init() = {
+    s <- fset0;
+  }
+
+  proc fin() = {}
+
+  proc sample() = {
+    var r : t;
+
+    r <$ dt \ (mem s);
+    s <- s `|` fset1 r;
+    return r;
+  }
+}.
+
+(* ------------------------------------------------------- *)
+(* Useful Library Wrappers *)
+(* ------------------------------------------------------- *)
+
+(* Add counting to a library *)
+module Count (L : Lib) : Lib = {
+  var cs : int
+
+  proc init() = {
+    L.init();
+    cs <- 0;
+  }
+
+  proc fin = L.fin
+
+  proc sample() = {
+    var r : t;
+
+    cs <- cs + 1;
+    r <@ L.sample();
+    return r;
+  }
+}.
+
+(* Silence library calls after more than `max_samples` calls *)
+module Bound (L : Lib) : Lib = {
+  var cs : int
+
+  proc init() = {
+    L.init();
+    cs <- 0;
+  }
+
+  proc fin = L.fin
+
+  proc sample() = {
+    var r : t <- witness;
+
+    cs <- cs + 1;
+    if (cs <= max_samples) {
+      r <@ L.sample();
+    }
+    return r;
+  }
+}.
+
+(* Perform the library calls ahead of time *)
+module PreSample (L : Lib) : Lib = {
+  var samples : (int, t) fmap
+  var sample_index : int
+
+  proc init() = {
+    var i : int;
+    var t : t;
+    
+    L.init();
+
+    samples <- empty;
+    i <- 0;
+    while (i < max_samples) {
+      t <@ L.sample();
+      samples.[i] <- t;
+      i <- i + 1;
+    }
+    sample_index <- 0;
+  }
+  
+  proc fin = L.fin
+
+  proc sample() = {
+    var t : t;
+    
+    t <- oget samples.[sample_index];
+    sample_index <- sample_index + 1;
+    return t;
+  }
+}.
+
+(* ------------------------------------------------------- *)
+(* Proof Components *)
+(* ------------------------------------------------------- *)
+
+(* A collection of bad events used by various proof steps *)
+module Bads = {
+  var bad_sample : bool
+  var bad_collision : bool
+}.
+
+(* PROM instance for lazy/eager arguments *)
+clone PROM.FullRO as RO with
+  type in_t <- int,
+  type out_t <- t,
+  op dout <- fun _ => dt,
+  type d_in_t <- unit,
+  type d_out_t <- bool
+proof*.
+
+(* ------------------------------------------------------- *)
+(* Soundness of the Count wrapper *)
+(* ------------------------------------------------------- *)
+section Counting.
+
+declare module L <: Lib { -Count.cs }.
+declare module A <: Adv{ -Count.cs, -L }.
+
+equiv Counting_equiv:
+  Game(LibAdv(A, L)).main ~ Game(LibAdv(A, Count(L))).main:
+   ={glob A, glob L}
+  ==>
+   ={res, glob A, glob L}.
+proof.
+proc; inline.
+sim (: ={glob L}).
+by proc*; inline; sim.
+qed.
+
+(* ------------------------------------------------------- *)
+(* The Main Statement *)
+(* ------------------------------------------------------- *)
+lemma Counting &m:
+  Pr[Game(LibAdv(A, L)).main() @ &m : res] = Pr[Game(LibAdv(A, Count(L))).main() @ &m : res].
+proof. by byequiv Counting_equiv. qed.
+
+end section Counting.
+
+(* ------------------------------------------------------- *)
+(* Soundness of the Bound wrapper *)
+(* ------------------------------------------------------- *)
+section Bounding.
+
+(* ------------------------------------------------------- *)
+(* Intermediate games for the proof of bounding *)
+(* ------------------------------------------------------- *)
+
+local module Bad1 (L : Lib) : Lib = {
+  proc init() = {
+    L.init();
+    Bads.bad_sample <- false;
+    Bound.cs <- 0;
+  }
+
+  proc fin() = {
+    L.fin();
+  }
+
+  proc sample() = {
+    var r : t;
+
+    Bound.cs <- Bound.cs + 1;
+    if (Bound.cs <= max_samples) {
+      r <@ L.sample();
+    } else {
+      Bads.bad_sample <- true;
+      r <@ L.sample();
+    }
+    return r;
+  }
+}.
+
+local module Bad2 (L : Lib) : Lib = Bad1(L) with {
+  proc sample [
+    ^if?^r<@ ~ { r <- witness; }
+  ]
+}.
+
+(* 
+  A specialised Game module that is needed due to 
+  limitations with `byupto` tactic.
+*)
+local module Game_init (A : Adv) (L : Lib) = {
+  proc main() = {
+    var b;
+
+    L.init();
+    Bads.bad_sample <- false;
+    A(L).init();
+    b <@ A(L).run();
+    A(L).fin();
+    L.fin();
+    return b;
+  }
+}.
+
+(* ------------------------------------------------------- *)
+(* The Library *)
+(* ------------------------------------------------------- *)
+
+(* We prove this generically for all libraries. *)
+declare module L <: Lib { +BDAY_rand, +BDAY_uniq, +PreSample }.
+
+(* ------------------------------------------------------- *)
+(* The Adversary *)
+(* ------------------------------------------------------- *)
+
+(* It can only access it's own memory *)
+declare module A <: Adv { -L, -Bound.cs, -Count.cs, -Bads.bad_sample}.
+
+(* It cannot make more than `max_samples` number of calls to `sample` *)
+declare axiom A_bounded: forall (L <: Lib {+BDAY_rand, +BDAY_uniq, +Bound, +PreSample, +Bads}),
+  hoare[Game(LibAdv(A, Count(L))).main: true ==> Count.cs <= max_samples].
+
+(* ------------------------------------------------------- *)
+(* The Proof Steps *)
+(* ------------------------------------------------------- *)
+
+(* Introduce the bad event logging *)
+local lemma Step1 &m:
+  Pr[Game(LibAdv(A, Count(L))).main() @ &m : res] = Pr[Game_init(A, Count(Bad1(L))).main() @ &m : res].
+proof.
+byequiv => //.
+proc; inline.
+sim (: ={glob L} /\ ={cs}(Count, Bound)).
+proc; inline.
+by sp; if{2}; wp; call(: true); auto.
+qed.
+
+(* We prove equivalence using an up-to-bad for an impossible bad *)
+local lemma Step2 &m:
+  Pr[Game_init(A, Count(Bad1(L))).main() @ &m : res] = Pr[Game_init(A, Count(Bad2(L))).main() @ &m : res].
+proof.
+apply abs_eq.
+apply (ler_trans (maxr 0%r 0%r)); last done. 
+have -{1}<- : Pr[Game_init(A, Count(Bad1(L))).main() @ &m : Bads.bad_sample] = 0%r.
++ have <- : Pr[Game(LibAdv(A, Count(Bad1(L)))).main() @ &m : max_samples < Count.cs] = 0%r.
+  - byphoare => //.
+    hoare.
+    by conseq (A_bounded (Bad1(L))) => /#.
+  byequiv => //.
+  proc; inline.
+  call (: true).
+  do 3! (call (:
+    ={glob L, Bads.bad_sample, Count.cs, Bound.cs}
+  /\ (Count.cs = Bound.cs){1}
+  /\ (Bads.bad_sample <=> max_samples < Count.cs){1}
+  ); 1: by proc; inline; sp; if; auto; call(:true); auto; smt()).
+  wp; call(: true).
+  auto => />.
+  smt(ge0_ms).
+have <- : Pr[Game_init(A, Count(Bad2(L))).main() @ &m : Bads.bad_sample] = 0%r.
++ have <- : Pr[Game(LibAdv(A, Count(Bad2(L)))).main() @ &m : max_samples < Count.cs] = 0%r.
+  - byphoare => //.
+    hoare.
+    by conseq (A_bounded (Bad2(L))) => /#.
+  byequiv => //.
+  proc; inline.
+  call(: true).
+  do 3! (call (:
+    ={glob L, Bads.bad_sample, Count.cs, Bound.cs}
+  /\ (Count.cs = Bound.cs){1}
+  /\ (Bads.bad_sample <=> max_samples < Count.cs){1}
+  ); 1: by proc; inline; sp; if => //; wp; [call (:true)|]; skip; smt()).
+  wp; call(: true).
+  auto => />.
+  smt(ge0_ms).
+byupto.
+qed.
+
+(* Remove the bad event logging *)
+local lemma Step3 &m:
+  Pr[Game_init(A, Count(Bad2(L))).main() @ &m : res] = Pr[Game(LibAdv(A, Bound(L))).main() @ &m : res].
+proof.
+byequiv => //.
+proc; inline.
+sim(: ={glob L, Bound.cs}).
+proc*; inline.
+sp; if => //; last by auto.
+wp; call(: true).
+by skip.
+qed.
+
+(* ------------------------------------------------------- *)
+(* The Main Statement *)
+(* ------------------------------------------------------- *)
+lemma Bounding &m:
+  Pr[Game(LibAdv(A, L)).main() @ &m : res] = Pr[Game(LibAdv(A, Bound(L))).main() @ &m : res].
+proof.
+rewrite (Counting L A &m).
+by rewrite Step1 Step2 Step3.
+qed.
+
+end section Bounding.
+
+(* ------------------------------------------------------- *)
+(* Soundness of the PreSample wrapper *)
+(* ------------------------------------------------------- *)
+section PreSample.
+
+clone Cache as C with
+   type t_out <- t,
+   op max_compute <- max_samples,
+   lemma ge0_mc <- ge0_ms.
+
+module F (L : Lib) : C.F = {
+  proc init = Bound(L).init
+  proc compute = Bound(L).sample
+}.
+
+module C_Red (C : C.Cache) : Lib = {
+  proc init() = {
+    C.init();
+    PreSample.sample_index <- 0;
+  }
+  
+  proc fin() = {}
+
+  proc sample() = {
+    var t : t;
+
+    t <@ C.get(PreSample.sample_index);
+    PreSample.sample_index <- PreSample.sample_index + 1;
+
+    return t;
+  }
+}.
+
+module (C_Adv (A : Adv) : C.Adv) (C : C.API) = {
+  module C' = {
+    proc init() = {}
+    include C
+  }
+  proc run = Game(LibAdv(A, C_Red(C'))).main
+}.
+
+
+(* ------------------------------------------------------- *)
+(* The Library *)
+(* ------------------------------------------------------- *)
+
+(* We prove this generically for all libraries. *)
+declare module L <: Lib { +BDAY_rand, +BDAY_uniq }.
+
+(* ------------------------------------------------------- *)
+(* The Adversary *)
+(* ------------------------------------------------------- *)
+
+(* It can only access it's own memory *)
+declare module A <: Adv { -L, -Bound.cs, -PreSample, -C.Eager, -C.Lazy, -Count.cs, -Bads.bad_sample}.
+
+(* It cannot make more than `max_samples` number of calls to `sample` *)
+declare axiom A_bounded: forall (L <: Lib {+BDAY_rand, +BDAY_uniq, +Bound, +PreSample, +Bads}),
+  hoare[Game(LibAdv(A, Count(L))).main: true ==> Count.cs <= max_samples].
+
+(* ------------------------------------------------------- *)
+(* Reduction associativty *)
+(* ------------------------------------------------------- *)
+
+lemma eager_assoc_pr &m: Pr[Game(LibAdv(A, C_Red(C.Eager(F(L))))).main() @ &m : res] = Pr[C.Game(C_Adv(A), C.Eager(F(L))).main() @ &m : res].
+proof. by byequiv => //; proc; inline; sim. qed.
+
+lemma lazy_assoc_pr &m: Pr[Game(LibAdv(A, C_Red(C.Lazy(F(L))))).main() @ &m : res] = Pr[C.Game(C_Adv(A), C.Lazy(F(L))).main() @ &m : res].
+proof. by byequiv => //; proc; inline; sim. qed.
+
+(* ------------------------------------------------------- *)
+(* Proof Steps *)
+(* ------------------------------------------------------- *)
+
+declare axiom L_fin_ll: islossless L.fin.
+
+lemma lazy_sound_pr &m:
+  Pr[Game(LibAdv(A, Bound(L))).main() @ &m : res]
+ =
+  Pr[Game(LibAdv(A, C_Red(C.Lazy(F(L))))).main() @ &m : res].
+proof.
+byequiv => //.
+proc; inline.
+have eqv : equiv[Bound(L).sample ~ C_Red(C.Lazy(F(L))).sample:
+  ={arg, glob L} 
+  /\ Bound.cs{1} = PreSample.sample_index{2}
+  /\ Bound.cs{2} <= Bound.cs{1}
+  /\ 0 <= Bound.cs{1}
+  /\ (forall i, 0 <= i < PreSample.sample_index < max_samples => i \in C.Lazy.cache){2}
+  /\ (forall i, PreSample.sample_index <= i => i \notin C.Lazy.cache){2}
+ ==>
+  ={res, glob L} 
+  /\ Bound.cs{1} = PreSample.sample_index{2}
+  /\ Bound.cs{2} <= Bound.cs{1}
+  /\ 0 <= Bound.cs{1}
+  /\ (forall i, 0 <= i < PreSample.sample_index < max_samples => i \in C.Lazy.cache){2}
+  /\ (forall i, PreSample.sample_index <= i => i \notin C.Lazy.cache){2}
+].
++ proc; inline.
+  sp.
+  if.
+  + smt().
+  + splitwhile {2} ^while : (i < c).
+    seq 0 2 : (#pre /\ (i = c){2}).
+    + while {2} (
+        (0 <= i <= c){2} 
+        /\ (c = PreSample.sample_index){2}
+        /\ (forall i, 0 <= i < c => i \in C.Lazy.cache){2}
+        /\ (forall i, c <= i => i \notin C.Lazy.cache){2}
+        /\ (Bound.cs <= PreSample.sample_index){2}
+        /\ ={glob L}
+      ) (c - i){2}.
+      - move => &m0 z.
+        by rcondf ^if; auto => /#.
+      auto => />. 
+      smt().
+    rcondt {2} ^while.
+    + auto.
+    rcondt {2} ^if; 1: by auto => /#.
+    rcondt {2} ^if; 1: by auto => /#.
+    rcondf {2} ^while.
+    + by auto; call(: true); auto => /#.
+    auto.
+    call (: true).
+    auto => />.
+    smt(get_setE).
+  by auto => /#.
+seq 5 7 : (={b}); last by islossless; exact L_fin_ll.
+do 3! (call (:
+  ={glob L} 
+  /\ Bound.cs{1} = PreSample.sample_index{2}
+  /\ Bound.cs{2} <= Bound.cs{1}
+  /\ 0 <= Bound.cs{1}
+  /\ (forall i, 0 <= i < PreSample.sample_index < max_samples => i \in C.Lazy.cache){2}
+  /\ (forall i, PreSample.sample_index <= i => i \notin C.Lazy.cache){2}
+); first by conseq eqv).
+wp; call(: true).
+skip => />.
+smt(mem_empty).
+qed.
+
+lemma eager_sound_pr &m:
+  Pr[Game(LibAdv(A, C_Red(C.Eager(F(L))))).main() @ &m : res]
+ =
+  Pr[Game(LibAdv(A, PreSample(Bound(L)))).main() @ &m : res].
+proof.
+byequiv => //.
+proc; inline.
+seq 9 9 : (={b}); last by islossless; exact L_fin_ll.
+sim (: ={glob L} /\ C.Eager.cache{1} = PreSample.samples{2} /\ ={PreSample.sample_index}).
+by proc; inline; sim.
+qed.
+
+lemma PreSample_BoundK &m:
+  Pr[Game(LibAdv(A, PreSample(Bound(L)))).main() @ &m : res]
+ =
+  Pr[Game(LibAdv(A, PreSample(L))).main() @ &m : res].
+proof.
+byequiv => //.
+proc; inline.
+sim.
+while (={i, glob L, PreSample.samples} /\ Bound.cs{1} = i{1}).
++ rcondt{1} ^if; 1: by auto => /#.
+  wp; call (: true).
+  by auto.
+wp; call (: true).
+by auto.
+qed.
+
+declare axiom BoundL_sample_ll: islossless Bound(L).sample.
+
+lemma PreSampling &m:
+  Pr[Game(LibAdv(A, L)).main() @ &m : res]
+ =
+  Pr[Game(LibAdv(A, PreSample(L))).main() @ &m : res].
+proof.
+rewrite (Bounding L A A_bounded &m).
+rewrite lazy_sound_pr.
+rewrite lazy_assoc_pr.
+rewrite -(C.Security (F(L)) (C_Adv(A)) _ (fun r => r)) /=.
++ exact BoundL_sample_ll.
+rewrite -eager_assoc_pr.
+rewrite eager_sound_pr.
+by rewrite PreSample_BoundK.
+qed.
+
+end section PreSample.
+
+(* ------------------------------------------------------- *)
+(* Proving the core distinguishing advantage *)
+(* ------------------------------------------------------- *)
+section Security.
+
+(* The BDAY_rand library with bad event tracking *)
+local module BDAY_rand_bad : Lib = {
+  proc init() = {
+    BDAY_uniq.s <- fset0;
+  }
+
+  proc fin() = {}
+
+  proc sample() = {
+    var r : t;
+
+    r <$ dt;
+    if (r \in BDAY_uniq.s) {
+      Bads.bad_collision <- true;
+    }
+    BDAY_uniq.s <- BDAY_uniq.s `|` fset1 r;
+    return r;
+  }
+}.
+
+(* The BDAY_uniq library with bad event tracking *)
+local module BDAY_uniq_bad : Lib = BDAY_rand_bad with {
+  proc sample [
+    ^if.^<- + { r <$ dt \ (mem BDAY_uniq.s); }
+  ]
+}.
+
+(* 
+  A specialised Game module that is needed due to 
+  limitations with the byupto tactic.
+*)
+local module Game_init (A : Adv) (L : Lib) = {
+  proc main() = {
+    var b;
+
+    Bads.bad_collision <- false;
+    L.init();
+    A(L).init();
+    b <@ A(L).run();
+    A(L).fin();
+    L.fin();
+    return b;
+  }
+}.
+
+(* ------------------------------------------------------- *)
+(* The Adversary *)
+(* ------------------------------------------------------- *)
+
+(* It can only access it's own memory *)
+declare module A <: Adv {
+  -BDAY_rand, -BDAY_uniq,
+  -Count, -Bound, -Bads.bad_collision
+}.
+
+(* It cannot make more than `max_samples` number of queries to `sample` *)
+declare axiom A_bounded: forall (L <: Lib{+ BDAY_rand, + BDAY_uniq, + Bound, + Bads}), hoare[Game(LibAdv(A, Count(L))).main: true ==> Count.cs <= max_samples].
+
+(* ------------------------------------------------------- *)
+(* Extra program equivalences for use in the proof *)
+(* ------------------------------------------------------- *)
+local clone TwoStepSampling as TwoStepProg with
+  type i <- unit,
+  type t <- t,
+  op dt <- (fun _ => dt).
+
+(* ------------------------------------------------------- *)
+(* Proof steps *)
+(* ------------------------------------------------------- *)
+  
+(* Add bad events to BDAY_rand *)
+local lemma Step1_rand &m:
+  Pr[Game(LibAdv(A, BDAY_rand)).main() @ &m : res] = Pr[Game_init(A, BDAY_rand_bad).main() @ &m : res].
+proof. by byequiv => //; proc; inline; sim. qed.
+
+(* Add bad events to BDAY_uniq *)
+local lemma Step1_uniq &m:
+  Pr[Game(LibAdv(A, BDAY_uniq)).main() @ &m : res] = Pr[Game_init(A, BDAY_uniq_bad).main() @ &m : res].
+proof.
+byequiv => //.
+proc; inline.
+sim (: ={BDAY_uniq.s}).
+proc.
+outline {1} ^r<$ by { r <@ TwoStepProg.S.direct((), (fun _ => mem BDAY_uniq.s)); }.
+rewrite equiv [{1} ^r<@ TwoStepProg.ll_direct_indirect_eq].
++ by skip; rewrite dt_ll.
+inline.
+sp.
+seq ^r0<$ ^r<$ : (#pre /\ r0{1} = r{2}); 1: by auto.
+by if => //; auto.
+qed.
+
+(* Add counting to the BDAY_rand_bad library *)
+local lemma Step2_rand &m:
+  Pr[Game_init(A, BDAY_rand_bad).main() @ &m : Bads.bad_collision] = Pr[Game_init(A, Count(BDAY_rand_bad)).main() @ &m : Count.cs <= max_samples /\ Bads.bad_collision].
+proof.
+byequiv => //.
+have eqv : equiv[Game_init(A, Count(BDAY_rand_bad)).main ~ Game(LibAdv(A, Count(BDAY_rand_bad))).main: ={glob A} ==> ={Count.cs}].
++ by proc; inline; sim.
+conseq (: _ ==> ={glob BDAY_rand_bad}) _ (: _ ==> Count.cs <= max_samples) => //.
++ conseq eqv (A_bounded BDAY_rand_bad) => //.
+  move => &1 _.
+  by exists (glob A){1}.
+proc; inline.
+sim (: ={BDAY_uniq.s, Bads.bad_collision}); by proc; inline; sim.
+qed.
+
+(* Add counting to the BDAY_uniq_bad library *)
+local lemma Step2_uniq &m:
+  Pr[Game_init(A, BDAY_uniq_bad).main() @ &m : Bads.bad_collision] = Pr[Game_init(A, Count(BDAY_uniq_bad)).main() @ &m : Count.cs <= max_samples /\ Bads.bad_collision].
+proof.
+byequiv => //.
+have eqv : equiv[Game_init(A, Count(BDAY_uniq_bad)).main ~ Game(LibAdv(A, Count(BDAY_uniq_bad))).main: ={glob A} ==> ={Count.cs}].
++ by proc; inline; sim.
+conseq (: _ ==> ={glob BDAY_uniq_bad}) _ (: _ ==> Count.cs <= max_samples) => //.
++ conseq eqv (A_bounded BDAY_uniq_bad) => //.
+  move => &1 _.
+  by exists (glob A){1}.
+proc; inline.
+sim (: ={glob BDAY_uniq_bad}); by proc; inline; sim.
+qed.
+
+(* Use `fel` to bound the bad event for BDAY_rand *)
+local lemma Collision_rand &m: 
+  Pr[Game_init(A, Count(BDAY_rand_bad)).main() @ &m : Count.cs <= max_samples /\ Bads.bad_collision]
+ <=
+  (max_samples * (max_samples - 1))%r / 2%r * mu1 dt (mode dt).
+proof.
+fel 2 (Count.cs) (fun x, x%r * mu1 dt (mode dt)) max_samples (Bads.bad_collision) [] (!Bads.bad_collision => card BDAY_uniq.s = Count.cs) => //.
++ by rewrite -Bigreal.BRA.mulr_suml Bigreal.sumidE 1:ge0_ms.
++ by inline; auto; rewrite fcards0.
++ proc; inline.
+  wp; rnd (mem BDAY_uniq.s).
+  auto => /> &hr *.
+  apply (Mu_mem.mu_mem_le (BDAY_uniq.s{hr}) dt (mu1 dt (mode dt))). 
+  by move=> x _; rewrite mode_ge.
+move => c.
+proc; inline; auto => />.
+move => &hr inv r _.
+rewrite ltzS /=.
+move => r_not_in_s /inv.
+by rewrite fcardU1 addzC r_not_in_s => ->.
+qed.
+
+(* Use `fel` to bound the bad event for BDAY_uniq *)
+local lemma Collision_uniq &m: 
+  Pr[Game_init(A, Count(BDAY_uniq_bad)).main() @ &m : Count.cs <= max_samples /\ Bads.bad_collision]
+ <=
+  (max_samples * (max_samples - 1))%r / 2%r * mu1 dt (mode dt).
+proof.
+fel 2 (Count.cs) (fun x, x%r * mu1 dt (mode dt)) max_samples (Bads.bad_collision) [] (!Bads.bad_collision => card BDAY_uniq.s = Count.cs) => //.
++ by rewrite -Bigreal.BRA.mulr_suml Bigreal.sumidE 1:ge0_ms.
++ by inline; auto; rewrite fcards0. 
++ proc; inline.
+  seq ^r0<$ : (r0 \in BDAY_uniq.s) (Count.cs%r * mu1 dt (mode dt)) 1%r _ 0%r (!Bads.bad_collision). 
+  - by auto.
+  - rnd (mem BDAY_uniq.s).
+    auto => /> &hr *.
+    apply (Mu_mem.mu_mem_le (BDAY_uniq.s{hr}) dt (mu1 dt (mode dt))). 
+    by move=> x _; rewrite mode_ge.
+  - by rcondt ^if.
+  - hoare.
+    rcondf ^if => //.
+    by auto.
+  done.
+move => c.
+proc; inline.
+sp; seq ^r0<$ : (#pre); 1: by rnd => />.
+if => //.
++ auto => />.
+  by rewrite ltzS.
+auto => /> &hr. 
+rewrite ltzS /=.
+move => inv r_not_in_s /inv.
+by rewrite fcardU1 addzC r_not_in_s => ->.
+qed.
+
+(* ------------------------------------------------------- *)
+(* The Main Statement *)
+(* ------------------------------------------------------- *)
+lemma Security &m:
+  `| Pr[Game(LibAdv(A, BDAY_rand)).main() @ &m : res] - Pr[Game(LibAdv(A, BDAY_uniq)).main() @ &m : res] |
+ <=
+  (max_samples * (max_samples - 1))%r / 2%r * mu1 dt (mode dt).
+proof.
+rewrite Step1_rand Step1_uniq.
+rewrite (ler_trans (maxr Pr[Game_init(A, BDAY_rand_bad).main() @ &m : Bads.bad_collision] Pr[Game_init(A, BDAY_uniq_bad).main() @ &m : Bads.bad_collision])).
++ by byupto.
+rewrite ler_maxrP.
+split.
++ rewrite Step2_rand.
+  exact Collision_rand.
+rewrite Step2_uniq.
+exact Collision_uniq.
+qed.
+
+end section Security.
+
+(* ------------------------------------------------------- *)
+(* Proving the tighter distinguishing advantage *)
+(* ------------------------------------------------------- *)
+section SecurityTight.
+
+(* ------------------------------------------------------- *)
+(* Intermediate games for the proof of security *)
+(* ------------------------------------------------------- *)
+local module Bad1 = {
+  proc init() : unit = {
+    var i : int;
+    var t : t;
+    
+    PreSample.samples <- empty;
+    BDAY_uniq.s <- fset0;
+    i <- 0;
+    while (i < max_samples){
+      t <$ dt;
+      if (t \in BDAY_uniq.s) {
+        Bads.bad_collision <- true; 
+      }
+      BDAY_uniq.s <- BDAY_uniq.s `|` fset1 t;
+      PreSample.samples.[i] <- t;
+      i <- i + 1;
+    }
+    PreSample.sample_index <- 0;
+  }
+  
+  proc fin() = { }
+  
+  proc sample() : t = {
+    var t : t;
+    
+    t <- oget PreSample.samples.[PreSample.sample_index];
+    PreSample.sample_index <- PreSample.sample_index + 1;
+    
+    return t;
+  }
+}.
+
+local module Bad2 = Bad1 with {
+  proc init [
+    ^while.^if.^Bads.bad_collision<- + { t <$ dt \ (mem BDAY_uniq.s); }
+  ]
+}.
+
+(* 
+  A specialised Game module that is needed due to 
+  limitations with the byupto tactic.
+*)
+local module Game_init (A : Adv) (L : Lib) = {
+  proc main() = {
+    var b;
+
+    Bads.bad_collision <- false;
+    L.init();
+    A(L).init();
+    b <@ A(L).run();
+    A(L).fin();
+    L.fin();
+    return b;
+  }
+}.
+
+(* ------------------------------------------------------- *)
+(* The Adversary *)
+(* ------------------------------------------------------- *)
+
+(* It can only access it's own memory *)
+declare module A <: Adv {
+  -BDAY_rand, -BDAY_uniq, 
+  -Count, -Bound, -PreSample, -Bads,
+  -C.Eager, -C.Lazy
+}.
+
+(* It cannot make more than `max_samples` number of queries to `sample` *)
+declare axiom A_bounded: forall (L <: Lib{ +BDAY_rand, +BDAY_uniq, +Bound, +PreSample, +Bads }), hoare[Game(LibAdv(A, Count(L))).main: true ==> Count.cs <= max_samples].
+
+(* Lossless lemmas for A *)
+declare axiom A_init_ll: forall (L <: API{-A}), islossless L.sample => islossless A(L).init.
+declare axiom A_run_ll: forall (L <: API{-A}), islossless L.sample => islossless A(L).run.
+declare axiom A_fin_ll: forall (L <: API{-A}), islossless L.sample => islossless A(L).fin.
+
+(* dexcepted lossless lemma *)
+declare axiom dt_excepted_ll (s : t fset): card s < max_samples => is_lossless (dt \ mem s).
+declare axiom dt_uni: is_uniform dt.
+
+(* ------------------------------------------------------- *)
+(* Extra program equivalences for use in the proof *)
+(* ------------------------------------------------------- *)
+local clone TwoStepSampling as TwoStepProg with
+  type i <- unit,
+  type t <- t,
+  op dt <- (fun _ => dt).
+  
+local clone Birthday as BD with
+  type t <- t,
+  op dt <- dt,
+  lemma dt_ll <- dt_ll,
+  lemma dt_uni <- dt_uni
+proof*.
+
+(* ------------------------------------------------------- *)
+(* Proof steps *)
+(* ------------------------------------------------------- *)
+  
+(* Add bad events to BDAY_rand *)
+local lemma Step1_rand &m:
+  Pr[Game(LibAdv(A, PreSample(BDAY_rand))).main() @ &m : res] = Pr[Game_init(A, Bad1).main() @ &m : res].
+proof. by byequiv => //; proc; inline; sim. qed.
+
+(* Add bad events to BDAY_uniq *)
+local lemma Step1_uniq &m:
+  Pr[Game(LibAdv(A, PreSample(BDAY_uniq))).main() @ &m : res] = Pr[Game_init(A, Bad2).main() @ &m : res].
+proof.
+byequiv => //.
+proc; inline.
+sim.  
+while (={i, PreSample.samples, BDAY_uniq.s}).
++ outline {1} ^r<$ by { r <@ TwoStepProg.S.direct((), (fun _ => mem BDAY_uniq.s)); }.
+  rewrite equiv [{1} ^r<@ TwoStepProg.ll_direct_indirect_eq].
+  - by skip; rewrite dt_ll.
+  inline.
+  sp; seq ^r0<$ ^t<$ : (#pre /\ r0{1} = t{2}); 1: by auto.
+  by if => //; auto.
+by auto.
+qed.
+
+local lemma Bad1_bday &m:
+  Pr[Game_init(A, Bad1).main() @ &m : Bads.bad_collision] = Pr[BD.Sample.loop(max_samples) @ &m : res].
+proof.
+byequiv => //.
+proc; inline.
+do 3! (
+  call {1} (: true ==> true);
+  1: (by proc (true) => //;
+         1: (exact A_init_ll || exact A_run_ll || exact A_fin_ll);
+         islossless)
+).
+sim.
+wp; while (={i} /\ Bads.bad_collision{1} = bad{2} /\ q{2} = max_samples /\ BDAY_uniq.s{1} = seen{2}).
++ by auto.
+by auto.
+qed.
+
+local lemma Bad2_bday &m:
+  Pr[Game_init(A, Bad2).main() @ &m : Bads.bad_collision] = Pr[BD.Sample.loop(max_samples) @ &m : res].
+proof.
+byequiv => //.
+proc; inline.
+do 3! (
+  call {1} (: true ==> true);
+  1: (by proc (true) => //;
+         1: (exact A_init_ll || exact A_run_ll || exact A_fin_ll);
+         islossless)
+).
+sim.
+wp; while (={i} /\(0 <= i <= max_samples){1} /\ (card BDAY_uniq.s <= i){1} /\ Bads.bad_collision{1} = bad{2} /\ q{2} = max_samples /\ (!bad{2} => BDAY_uniq.s{1} = seen{2})).
++ seq 1 1 : (#pre /\ ={t}); 1: by auto.
+  if {1}; auto => />; smt(fcardU1 dt_excepted_ll).
+auto => />.
+by rewrite fcards0 ge0_ms.
+qed.
+
+lemma PreSampling_uniq &m:
+  Pr[Game(LibAdv(A, BDAY_uniq)).main() @ &m : res]
+ =
+  Pr[Game(LibAdv(A, PreSample(BDAY_uniq))).main() @ &m : res].
+proof.
+rewrite (Bounding BDAY_uniq A A_bounded &m).
+rewrite (lazy_sound_pr BDAY_uniq A A_bounded _ &m).
++ by islossless.
+rewrite (lazy_assoc_pr BDAY_uniq A A_bounded &m).
+rewrite -(PreSample_BoundK BDAY_uniq A A_bounded _ &m).
++ by islossless.
+rewrite -(eager_sound_pr BDAY_uniq A A_bounded _ &m).
++ by islossless.
+rewrite (eager_assoc_pr BDAY_uniq A A_bounded &m).
+byequiv (: ={glob A, BDAY_uniq.s, PreSample.sample_index} ==> _) => //.
+symmetry.
+proc.
+inline {1} 1; inline {2} 1.
+replace * {2} { x } by {
+  x;
+  C.O(F(BDAY_uniq)).l();
+}; last first.
++ seq 3 3: (#pre /\ ={b} /\ card BDAY_uniq.s{1} <= Bound.cs{1}).
+  - conseq />.
+    inline.
+    have eqv : equiv[C_Red(C_Adv(A, C.Lazy(F(BDAY_uniq))).C').sample ~ C_Red(C_Adv(A, C.Lazy(F(BDAY_uniq))).C').sample:
+      ={arg, BDAY_uniq.s, Bound.cs, PreSample.sample_index, C.Lazy.cache} /\ card BDAY_uniq.s{1} <= Bound.cs{1}
+    ==>
+      ={res, BDAY_uniq.s, Bound.cs, PreSample.sample_index, C.Lazy.cache} /\ card BDAY_uniq.s{1} <= Bound.cs{1}
+    ].
+    + proc; inline.
+      sp; if => //; 2: by auto.
+      wp; while (={i, c, C.Lazy.cache, Bound.cs, BDAY_uniq.s} /\ c{1} < max_samples /\ (0 <= i <= c + 1){1} /\ card BDAY_uniq.s{1} <= Bound.cs{1}).
+      + if; auto => />; last first.
+        + smt().
+        sp; if => //.
+        + auto => />.
+          smt(supp_dexcepted fcardU1).
+        by auto => /#.
+      by auto => /#.
+    
+    wp.
+    do 3! (call (: ={BDAY_uniq.s, Bound.cs, PreSample.sample_index, C.Lazy.cache} /\ card BDAY_uniq.s{1} <= Bound.cs{1}); first by conseq eqv).
+    auto => />.
+    smt(fcards0).
+  inline.
+  sp; while {1} (card BDAY_uniq.s{1} <= Bound.cs{1}) (max_samples - i{1}).
+  - move => _ z.
+    if; 2: by auto => /#.
+    sp; if; 2: by auto => /#.
+    auto => />.
+    smt(fcardU1 dt_excepted_ll).
+  by skip => /#.
+seq 2 2 : (#pre /\ ={Bound.cs} /\ ={cache}(C.Eager, C.Lazy) /\ C.Eager.cache{1} = empty).
++ by inline; auto. 
+transitivity* {1} { C.O(F(BDAY_uniq)).e(); b <@ C_Adv(A, C.Eager(F(BDAY_uniq))).run(); }.
++ inline {2} 1.
+  sim 2 2.
+  conseq />.
+  while (={C.Eager.cache, Bound.cs, BDAY_uniq.s} /\ i{1} = i0{2} /\ (forall j, i0 <= j => j \notin C.Eager.cache){2}).
+  + rcondt {2} ^if; 1: by auto => /#.
+    wp; call(: ={Bound.cs, BDAY_uniq.s}).
+    + sim.
+    auto => />.
+    smt(mem_set).
+  auto => /> j.
+  by rewrite mem_empty.
+eager call (C.swap_el (F(BDAY_uniq)) (C_Adv(A))).
+auto => />.
+qed.
+
+(* ------------------------------------------------------- *)
+(* The Main Statement *)
+(* ------------------------------------------------------- *)
+lemma SecurityTight &m:
+  `| Pr[Game(LibAdv(A, BDAY_rand)).main() @ &m : res] - Pr[Game(LibAdv(A, BDAY_uniq)).main() @ &m : res] |
+ <=
+   1%r - Bigreal.BRM.bigi predT (fun (j : int) => 1%r - j%r / (List.size (Finite.to_seq (support dt)))%r) 1 max_samples.
+proof.
+rewrite (PreSampling BDAY_rand A A_bounded _ _ &m).
++ by islossless.
++ by islossless; proc.
+rewrite PreSampling_uniq. 
+rewrite Step1_rand Step1_uniq.
+rewrite (ler_trans (maxr Pr[Game_init(A, Bad1).main() @ &m : Bads.bad_collision] Pr[Game_init(A, Bad2).main() @ &m : Bads.bad_collision])).
++ by byupto.
+rewrite ler_maxrP.
+rewrite Bad1_bday Bad2_bday.
+rewrite -(BD.list_loop_eq (fun r => r) max_samples &m _) /=.
+by rewrite (BD.Collision max_samples &m).
+qed.
+
+end section SecurityTight.
+
+print Counting.
+print Bounding.
+print PreSampling.
+print Security.
+print SecurityTight.
