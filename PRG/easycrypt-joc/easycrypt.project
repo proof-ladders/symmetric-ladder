@@ -1,4 +1,2 @@
 [general]
 idirs = ../../common/easycrypt-joc
-provers = CVC5@1.0
-provers = Z3@4.12

@@ -1,4 +1,3 @@
-
 require import AllCore List.
 require import Distr DList DMap.
 require (*  *) BitWord.
@@ -132,7 +131,6 @@ rewrite supp_dlist => // [#] size_a _.
 rewrite supp_dlist => // [#] size_b _.
 exact concat11_cat.
 qed.
-
 
 lemma split_dbits_3lam: dbits_3lam = dmap (dbits_lam `*` dbits_2lam) (fun (p : bits_lam * bits_2lam) => concat12 p.`1 p.`2).
 proof.

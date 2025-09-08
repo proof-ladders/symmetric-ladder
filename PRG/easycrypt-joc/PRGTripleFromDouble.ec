@@ -9,7 +9,7 @@ require import Libraries.
 require import AllCore List.
 require import Distr DList DMap.
 require (*  *) PRG BitStrings.
-(*   *) import StdOrder.IntOrder.
+(*   *) import StdOrder.IntOrder StdOrder.RealOrder.
 
 (* Initial input length of the bit strings *)
 op lambda : { int | 0 < lambda } as gt0_lam.
@@ -21,7 +21,7 @@ clone import BitStrings as BS with
 proof *.
 
 (* ------------------------------------------------------- *)
-(* The construction *)
+(* The Construction *)
 (* ------------------------------------------------------- *)
 
 clone PRG as Double with
@@ -51,7 +51,6 @@ module H (G : Double.G) : Triple.G = {
 }.
 
 section.
-
 
 (* ------------------------------------------------------- *)
 (* Intermediate games for the proof of security *)
@@ -128,7 +127,7 @@ declare module G <: Double.G {
 (* ------------------------------------------------------- *)
 
 (* It cannot look inside the state of the games or the PRG *)
-declare module A <: Triple.Adv{
+declare module A <: Triple.Adv {
   -G,
 
   -Inline1,
@@ -151,33 +150,33 @@ local module Factor_Lib (F : Factor ) (L : Double.Lib) = {
   include F(L)[-init, fin]
 }.
 
-module Factor1_Adv (A : Triple.Adv) = Factor_Adv(Factor1(G), A).
-module Factor2_Adv (A : Triple.Adv) = Factor_Adv(Factor2(G), A).
+module Factor1_Adv = Factor_Adv(Factor1(G), A).
+module Factor2_Adv = Factor_Adv(Factor2(G), A).
 local module Factor1_Lib (L : Double.Lib) = Factor_Lib(Factor1(G), L).
 local module Factor2_Lib (L : Double.Lib) = Factor_Lib(Factor2(G), L).
 
 local lemma Factor1_real &m:
   Pr[Game(Triple.LibAdv(A, Factor1_Lib(Double.PRG_real(G)))).main() @ &m : res]
  =
-  Pr[Game(Double.LibAdv(Factor1_Adv(A), Double.PRG_real(G))).main() @ &m : res].
+  Pr[Game(Double.LibAdv(Factor1_Adv, Double.PRG_real(G))).main() @ &m : res].
 proof. by byequiv => //; proc; inline; sim. qed.
 
 local lemma Factor1_rand &m:
   Pr[Game(Triple.LibAdv(A, Factor1_Lib(Double.PRG_rand(G)))).main() @ &m : res]
  =
-  Pr[Game(Double.LibAdv(Factor1_Adv(A), Double.PRG_rand(G))).main() @ &m : res].
+  Pr[Game(Double.LibAdv(Factor1_Adv, Double.PRG_rand(G))).main() @ &m : res].
 proof. by byequiv => //; proc; inline; sim. qed.
 
 local lemma Factor2_real &m:
   Pr[Game(Triple.LibAdv(A, Factor2_Lib(Double.PRG_real(G)))).main() @ &m : res]
  =
-  Pr[Game(Double.LibAdv(Factor2_Adv(A), Double.PRG_real(G))).main() @ &m : res].
+  Pr[Game(Double.LibAdv(Factor2_Adv, Double.PRG_real(G))).main() @ &m : res].
 proof. by byequiv => //; proc; inline; sim. qed.
 
 local lemma Factor2_rand &m:
   Pr[Game(Triple.LibAdv(A, Factor2_Lib(Double.PRG_rand(G)))).main() @ &m : res]
  =
-  Pr[Game(Double.LibAdv(Factor2_Adv(A), Double.PRG_rand(G))).main() @ &m : res].
+  Pr[Game(Double.LibAdv(Factor2_Adv, Double.PRG_rand(G))).main() @ &m : res].
 proof. by byequiv => //; proc; inline; sim. qed.
 
 (* ------------------------------------------------------- *)
@@ -240,7 +239,7 @@ proc; inline.
 by sim.
 qed.
 
-(* Show that halfing the sampling of 2 * lambda length bitstring can be replaced by two separate samplings. *)
+(* Show that halving the sampling of 2 * lambda length bitstring can be replaced by two separate samplings. *)
 local lemma Step4 &m:
   Pr[Game(Triple.LibAdv(A, Inline2(G))).main() @ &m : res]
  =
@@ -311,15 +310,16 @@ congr.
 by rewrite concat11_half.
 qed.
 
+(* The Main Theorem *)
 lemma Security &m:
   `| Pr[Game(Triple.LibAdv(A, Triple.PRG_real(H(G)))).main() @ &m : res]
    - Pr[Game(Triple.LibAdv(A, Triple.PRG_rand(H(G)))).main() @ &m : res] |
  <= 
-  `| Pr[Game(Double.LibAdv(Factor1_Adv(A), Double.PRG_real(G))).main() @ &m : res]
-   - Pr[Game(Double.LibAdv(Factor1_Adv(A), Double.PRG_rand(G))).main() @ &m : res] |
+  `| Pr[Game(Double.LibAdv(Factor1_Adv, Double.PRG_real(G))).main() @ &m : res]
+   - Pr[Game(Double.LibAdv(Factor1_Adv, Double.PRG_rand(G))).main() @ &m : res] |
   + 
-  `| Pr[Game(Double.LibAdv(Factor2_Adv(A), Double.PRG_real(G))).main() @ &m : res]
-   - Pr[Game(Double.LibAdv(Factor2_Adv(A), Double.PRG_rand(G))).main() @ &m : res] |.
+  `| Pr[Game(Double.LibAdv(Factor2_Adv, Double.PRG_real(G))).main() @ &m : res]
+   - Pr[Game(Double.LibAdv(Factor2_Adv, Double.PRG_rand(G))).main() @ &m : res] |.
 proof.
 rewrite Step1 Step2.
 rewrite Factor1_real.
@@ -330,9 +330,14 @@ rewrite Factor2_real.
 apply (asmp Pr[Game(Triple.LibAdv(A, Factor2_Lib(Double.PRG_rand(G)))).main() @ &m : res]).
 rewrite -{1}Factor2_rand.
 rewrite Step6 Step7.
-smt().
+rewrite normr0 le0r.
+left.
+by ring.
 qed.
 
 end section.
 
+print H.
+print Factor1.
+print Factor2.
 print Security.
