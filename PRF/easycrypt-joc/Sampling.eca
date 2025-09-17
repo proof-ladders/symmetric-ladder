@@ -1018,8 +1018,3 @@ qed.
 
 end section SecurityTight.
 
-print Counting.
-print Bounding.
-print PreSampling.
-print Security.
-print SecurityTight.

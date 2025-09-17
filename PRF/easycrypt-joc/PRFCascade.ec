@@ -756,4 +756,7 @@ qed.
 
 end section Security.
 
+print H.
+print Factor1.
+print Factor2.
 print Security.
