@@ -1,0 +1,151 @@
+require import AllCore List.
+require import Distr DList DMap.
+require (*  *) BitWord.
+(*   *) import StdOrder.IntOrder.
+
+(* Initial input length of the bit strings *)
+op lambda : { int | 0 < lambda } as gt0_lam.
+
+(* ------------------------------------------------------- *)
+(* Helper lemmas on lambda *)
+(* ------------------------------------------------------- *)
+
+lemma ge0_lam : 0 <= lambda.
+proof. by exact /ltrW/gt0_lam. qed.
+
+lemma ge0_lam2 : 0 <= 2 * lambda.
+proof. by rewrite pmulr_lge0 //; exact gt0_lam. qed.
+
+lemma lam_lt_2lam: lambda < 2 * lambda.
+proof. by rewrite ltr_pmull //; exact gt0_lam. qed.
+
+lemma lam_lt_3lam: lambda < 3 * lambda.
+proof. by rewrite ltr_pmull //; exact gt0_lam. qed.
+
+lemma lam2_add11: 2 * lambda = lambda + lambda.
+proof. by ring. qed.
+
+lemma lam2_sub1 : 2 * lambda - lambda = lambda.
+proof. by ring. qed.
+
+lemma lam3_add12 : 3 * lambda = lambda + 2 * lambda.
+proof. by ring. qed.
+
+hint simplify ge0_lam.
+
+(* ------------------------------------------------------- *)
+(* 
+   Bitstrings of lengths lambda, 2 * lambda, and
+   3 * lambda.
+   Also provide a few helper lemmas on halving and joining
+   various lengths of bitstrings. 
+*)
+(* ------------------------------------------------------- *)
+
+clone BitWord as Bits_lam with
+  op n <- lambda
+proof *.
+realize gt0_n by exact gt0_lam.
+
+clone BitWord as Bits_2lam with
+  op n <- 2 * lambda
+proof *.
+realize gt0_n by exact /(ltr_trans lambda _ _ gt0_lam)/lam_lt_2lam.
+
+clone BitWord as Bits_3lam with
+  op n <- 3 * lambda
+proof *.
+realize gt0_n by exact /(ltr_trans lambda _ _ gt0_lam)/lam_lt_3lam.
+
+(* Useful abbreviations *)
+type bits_lam = Bits_lam.word.
+type bits_2lam = Bits_2lam.word.
+type bits_3lam = Bits_3lam.word.
+abbrev dbits_lam = Bits_lam.DWord.dunifin.
+abbrev dbits_2lam = Bits_2lam.DWord.dunifin.
+abbrev dbits_3lam = Bits_3lam.DWord.dunifin.
+
+op concat11 (a b : bits_lam) : bits_2lam = Bits_2lam.mkword ((Bits_lam.ofword a) ++ (Bits_lam.ofword b)).
+abbrev (||) = concat11.
+
+op concat12 (a : bits_lam) (b : bits_2lam) : bits_3lam = 
+  Bits_3lam.mkword ((Bits_lam.ofword a) ++ (Bits_2lam.ofword b)).
+
+op half (a : bits_2lam) : bits_lam * bits_lam =
+  (Bits_lam.mkword (take lambda (Bits_2lam.ofword a)), Bits_lam.mkword (drop lambda (Bits_2lam.ofword a))).
+
+lemma half_concat11 a b: half (a || b) = (a, b).
+proof.
+rewrite /half /(||) Bits_2lam.ofwordK.
++ by rewrite size_cat 2!Bits_lam.size_word lam2_add11.
+rewrite take_cat drop_cat Bits_lam.size_word take0 drop0 cats0 /=.
+by rewrite 2!Bits_lam.mkwordK. 
+qed.
+
+lemma concat11_half a: ((half a).`1 || (half a).`2) = a.
+proof.
+rewrite /half /concat11 /= Bits_lam.ofwordK.
++ rewrite size_take //.
+  by rewrite Bits_2lam.size_word lam_lt_2lam. 
+rewrite Bits_lam.ofwordK.
++ rewrite size_drop //.
+  rewrite Bits_2lam.size_word lam2_sub1.
+  exact ler_maxr.
+by rewrite cat_take_drop Bits_2lam.mkwordK.
+qed.
+
+lemma concat11_cat a b:
+  size a = lambda => 
+  size b = lambda => 
+  Bits_2lam.mkword (a ++ b) = ((Bits_lam.mkword a) || (Bits_lam.mkword b)).
+proof.
+move => size_a size_b.
+rewrite eq_sym /concat11.
+congr.
+by rewrite !Bits_lam.ofwordK.
+qed.
+
+lemma concat12_cat a b:
+  size a = lambda => 
+  size b = 2 * lambda => 
+  Bits_3lam.mkword (a ++ b) = concat12 (Bits_lam.mkword a) (Bits_2lam.mkword b).
+proof.
+move => size_a size_b.
+rewrite eq_sym /concat12.
+congr.
+rewrite Bits_lam.ofwordK //.
+by rewrite Bits_2lam.ofwordK.
+qed.
+
+lemma split_dbits_2lam: dbits_2lam = dmap (dbits_lam `*` dbits_lam) (fun (p : bits_lam * bits_lam) => p.`1 || p.`2).
+proof.
+rewrite -Bits_2lam.ListSample.dword_is_dlist.
+rewrite -Bits_lam.ListSample.dword_is_dlist.
+rewrite dmap_dprod. 
+rewrite lam2_add11 dlist_add //.
+rewrite 2!dmap_comp /(\o) /=.
+apply eq_dmap_in.
+move=> [a b].
+rewrite supp_dprod => [#] /=.
+rewrite supp_dlist => // [#] size_a _.
+rewrite supp_dlist => // [#] size_b _.
+exact concat11_cat.
+qed.
+
+lemma split_dbits_3lam: dbits_3lam = dmap (dbits_lam `*` dbits_2lam) (fun (p : bits_lam * bits_2lam) => concat12 p.`1 p.`2).
+proof.
+rewrite -Bits_3lam.ListSample.dword_is_dlist.
+rewrite -Bits_2lam.ListSample.dword_is_dlist.
+rewrite -Bits_lam.ListSample.dword_is_dlist.
+rewrite dmap_dprod lam3_add12 dlist_add //.
++ exact ge0_lam2.
+rewrite 2!dmap_comp /(\o) /=.
+apply eq_dmap_in.
+move=> [a b].
+rewrite supp_dprod => [#] /=.
+rewrite supp_dlist => // [#] size_a _.
+rewrite supp_dlist.
++ exact ge0_lam2.
+move => // [#] size_b _.
+exact concat12_cat.
+qed.

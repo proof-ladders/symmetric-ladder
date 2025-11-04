@@ -1,0 +1,223 @@
+require import AllCore FMap List.
+require IterProc.
+
+op max_compute : { int | 0 <= max_compute } as ge0_mc.
+
+type t_out.
+
+(*
+Requirements:
+- islossless F.compute
+- no arguments
+*)
+module type F = {
+  proc init() : unit
+  proc compute() : t_out
+}.
+
+module type API = {
+  proc get(_: int) : t_out
+}.
+
+module type Cache = {
+  proc init() : unit
+  include API
+}.
+
+module Eager (F : F) : Cache = {
+  var cache : (int, t_out) fmap
+  
+  proc init() = {
+    var r : t_out;
+    var i : int;
+
+    F.init();
+    cache <- empty;
+
+    i <- 0;
+    while (i < max_compute) {
+      r <@ F.compute();
+      cache.[i] <- r;
+      i <- i + 1;
+    }
+  }
+  
+  proc get(c) = {
+    return oget cache.[c];
+  }
+}.
+
+module Lazy (F : F) : Cache = {
+  var cache : (int, t_out) fmap
+
+  proc init() = {
+    F.init();
+    cache <- empty;
+  }
+  
+  proc get(c) = {
+    var r : t_out;
+    var i : int;
+
+    if (0 <= c < max_compute) {
+      i <- 0;
+      while (i <= c) {
+        if (i \notin cache) {
+          r <@ F.compute();
+          cache.[i] <- r;
+        }
+        i <- i + 1;
+      }
+    }
+    return oget cache.[c];
+  }
+}.
+
+module type Adv (C : API) = {
+  proc run() : bool
+}.
+
+module Game (A : Adv) (C : Cache) = {
+  proc main() = {
+    var b;
+    C.init();
+    b <@ A(C).run();
+    return b;
+  }
+}.
+
+section Proof.
+
+declare module F <: F { -Eager, -Lazy }.
+
+declare module A <: Adv { -F, -Eager, -Lazy }.
+
+module O (F : F) = {
+  proc e() = {
+    var i, r;
+
+    i <- 0;
+    while (i < max_compute) {
+      if (i \notin Eager.cache) {
+        r <@ F.compute();
+        Eager.cache.[i] <- r;
+      }
+      i <- i + 1;
+    }
+  }
+
+  proc l() = {
+    var i, r;
+
+    i <- 0;
+    while (i < max_compute) {
+      if (i \notin Lazy.cache) {
+        r <@ F.compute();
+        Lazy.cache.[i] <- r;
+      }
+      i <- i + 1;
+    }
+  }
+}.
+
+lemma swap_el: eager[ 
+  O(F).e();
+  , A(Eager(F)).run
+~
+  A(Lazy(F)).run,
+  O(F).l();
+:
+={glob A, glob F} /\ ={cache}(Eager, Lazy)
+==>
+={glob A, glob F, res} /\ ={cache}(Eager, Lazy)
+].
+proof.
+eager proc (v:
+  O(F).e(); ~ O(F).l(); :
+={glob F} /\ ={cache}(Eager, Lazy)
+==>
+={glob F} /\ ={cache}(Eager, Lazy))
+(={glob F} /\ ={cache}(Eager, Lazy)).
++ by sim.
++ auto.
++ auto.
++ eager proc.
+  inline.
+  if {2}.
+  - case (0 = max_compute).
+    + exfalso => /#.
+    splitwhile {1} ^while : i <= c.
+    splitwhile {2} ^while{2} : i0 <= c.
+    seq 2 2 : ((={i, c, glob F} /\ (i = c + 1){1} /\ (0 <= c < max_compute){1} /\ ={cache}(Eager, Lazy) /\ (forall j, 0 <= j <= c => j \in Eager.cache){1})).
+    + sp; while (={i, c, glob F} /\ (0 <= i <= c + 1){1} /\ (0 <= c < max_compute){1} /\ ={cache}(Eager, Lazy) /\ (forall j, 0 <= j < i => j \in Eager.cache){1}).
+      - if => //.
+        + wp; call(: true).
+          skip => />.
+          smt(mem_set).
+        wp; skip => />.
+        smt().
+      by skip => /#.
+    sp; wp.
+    while (={c, glob F} /\ i{1} = i0{2} /\ ={cache}(Eager, Lazy) /\ (oget Eager.cache{1}.[c{1}] = result{2}) /\ (c \in Eager.cache){1}).
+    + if => //.
+      + wp; call(: true); skip.
+        smt(get_setE).
+      wp; skip => /#.
+    while {2} (={c, glob F} /\ ={cache}(Eager, Lazy) /\ (0 <= i0 <= c + 1){2} /\ (forall j, 0 <= j <= c => j \in Lazy.cache){2}) (c{2} - i0{2} + 1).
+    + move => &m z.
+      rcondf ^if.
+      + by skip => /#. 
+      by wp; skip => /#.
+    auto => />.
+    smt().
+  wp.
+  while (={c, glob F} /\ i{1} = i0{2} /\ !(0 <= c < max_compute){2} /\ ={cache}(Eager, Lazy) /\ (0 <= i{1}) /\ (oget Eager.cache{1}.[c{1}] = result{2})).
+    + if => //.
+      + wp; call(: true); skip.
+        smt(get_setE).
+      wp; skip => /#.
+  by wp; skip => />.
+by sim.
+qed.
+
+declare axiom F_ll: islossless F.compute.
+equiv Security_equiv: Game(A, Eager(F)).main ~ Game(A, Lazy(F)).main: ={glob F, glob A} ==> ={res}.
+proof.
+proc.
+inline.
+replace * {2} { x } by {
+  x;
+  O(F).l();
+}; last first.
++ seq 3 3 : (#pre /\ ={b}); 1: by sim.
+  inline.
+  sp; while {1} (true) (max_compute - i{1}).
+  - move => _ z.
+    wp; conseq />.
+    islossless.
+    - smt().
+    exact F_ll.
+  by skip => /#.
+seq 2 2 : (={glob F, glob A} /\ ={cache}(Eager, Lazy) /\ Eager.cache{1} = empty).
++ by wp; call(: true); auto. 
+transitivity* {1} { O(F).e(); b <@ A(Eager(F)).run(); }.
++ inline.
+  sim 2 2.
+  conseq />.
+  while (={Eager.cache, glob F} /\ i{1} = i0{2} /\ (forall j, i0 <= j => j \notin Eager.cache){2}).
+  + rcondt {2} ^if; 1: by auto => /#.
+    wp; call (: true).
+    auto => />.
+    smt(mem_set).
+  auto => /> j.
+  by rewrite mem_empty.
+eager call swap_el.
+by auto => />.
+qed.
+
+lemma Security P &m:
+  Pr[Game(A, Eager(F)).main() @ &m : P res]
+= Pr[Game(A, Lazy(F)).main() @ &m : P res].
+proof. by byequiv Security_equiv. qed.
+
+end section Proof.
