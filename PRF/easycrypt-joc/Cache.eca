@@ -24,9 +24,13 @@ module type Cache = {
   include API
 }.
 
-module Eager (F : F) : Cache = {
+module Cache = {
   var cache : (int, t_out) fmap
-  
+}.
+
+module Eager (F : F) : Cache = {
+  include var Cache
+
   proc init() = {
     var r : t_out;
     var i : int;
@@ -48,7 +52,7 @@ module Eager (F : F) : Cache = {
 }.
 
 module Lazy (F : F) : Cache = {
-  var cache : (int, t_out) fmap
+  include var Cache
 
   proc init() = {
     F.init();
@@ -93,27 +97,14 @@ declare module F <: F { -Eager, -Lazy }.
 declare module A <: Adv { -F, -Eager, -Lazy }.
 
 module O (F : F) = {
-  proc e() = {
+  proc r() = {
     var i, r;
 
     i <- 0;
     while (i < max_compute) {
-      if (i \notin Eager.cache) {
+      if (i \notin Cache.cache) {
         r <@ F.compute();
-        Eager.cache.[i] <- r;
-      }
-      i <- i + 1;
-    }
-  }
-
-  proc l() = {
-    var i, r;
-
-    i <- 0;
-    while (i < max_compute) {
-      if (i \notin Lazy.cache) {
-        r <@ F.compute();
-        Lazy.cache.[i] <- r;
+        Cache.cache.[i] <- r;
       }
       i <- i + 1;
     }
@@ -121,35 +112,28 @@ module O (F : F) = {
 }.
 
 lemma swap_el: eager[ 
-  O(F).e();
+  O(F).r();
   , A(Eager(F)).run
 ~
   A(Lazy(F)).run,
-  O(F).l();
+  O(F).r();
 :
-={glob A, glob F} /\ ={cache}(Eager, Lazy)
+={glob A, glob F, Cache.cache}
 ==>
-={glob A, glob F, res} /\ ={cache}(Eager, Lazy)
+={glob A, glob F, res}
 ].
 proof.
-eager proc (v:
-  O(F).e(); ~ O(F).l(); :
-={glob F} /\ ={cache}(Eager, Lazy)
-==>
-={glob F} /\ ={cache}(Eager, Lazy))
-(={glob F} /\ ={cache}(Eager, Lazy)).
+eager proc (={glob F, Cache.cache})=> //.
 + by sim.
-+ auto.
-+ auto.
 + eager proc.
   inline.
   if {2}.
   - case (0 = max_compute).
-    + exfalso => /#.
+    + by exfalso => /#.
     splitwhile {1} ^while : i <= c.
     splitwhile {2} ^while{2} : i0 <= c.
-    seq 2 2 : ((={i, c, glob F} /\ (i = c + 1){1} /\ (0 <= c < max_compute){1} /\ ={cache}(Eager, Lazy) /\ (forall j, 0 <= j <= c => j \in Eager.cache){1})).
-    + sp; while (={i, c, glob F} /\ (0 <= i <= c + 1){1} /\ (0 <= c < max_compute){1} /\ ={cache}(Eager, Lazy) /\ (forall j, 0 <= j < i => j \in Eager.cache){1}).
+    seq 2 2 : ((={i, c, glob F, Cache.cache} /\ (i = c + 1){1} /\ (0 <= c < max_compute){1} /\ (forall j, 0 <= j <= c => j \in Cache.cache){1})).
+    + sp; while (={i, c, glob F, Cache.cache} /\ (0 <= i <= c + 1){1} /\ (0 <= c < max_compute){1} /\ (forall j, 0 <= j < i => j \in Cache.cache){1}).
       - if => //.
         + wp; call(: true).
           skip => />.
@@ -158,12 +142,12 @@ eager proc (v:
         smt().
       by skip => /#.
     sp; wp.
-    while (={c, glob F} /\ i{1} = i0{2} /\ ={cache}(Eager, Lazy) /\ (oget Eager.cache{1}.[c{1}] = result{2}) /\ (c \in Eager.cache){1}).
+    while (={c, glob F, Cache.cache} /\ i{1} = i0{2} /\ (oget Cache.cache{1}.[c{1}] = result{2}) /\ (c \in Cache.cache){1}).
     + if => //.
       + wp; call(: true); skip.
         smt(get_setE).
       wp; skip => /#.
-    while {2} (={c, glob F} /\ ={cache}(Eager, Lazy) /\ (0 <= i0 <= c + 1){2} /\ (forall j, 0 <= j <= c => j \in Lazy.cache){2}) (c{2} - i0{2} + 1).
+    while {2} (={c, glob F, Cache.cache} /\ (0 <= i0 <= c + 1){2} /\ (forall j, 0 <= j <= c => j \in Cache.cache){2}) (c{2} - i0{2} + 1).
     + move => &m z.
       rcondf ^if.
       + by skip => /#. 
@@ -171,13 +155,14 @@ eager proc (v:
     auto => />.
     smt().
   wp.
-  while (={c, glob F} /\ i{1} = i0{2} /\ !(0 <= c < max_compute){2} /\ ={cache}(Eager, Lazy) /\ (0 <= i{1}) /\ (oget Eager.cache{1}.[c{1}] = result{2})).
+  while (={c, glob F, Cache.cache} /\ i{1} = i0{2} /\ !(0 <= c < max_compute){2} /\ (0 <= i{1}) /\ (oget Cache.cache{1}.[c{1}] = result{2})).
     + if => //.
       + wp; call(: true); skip.
         smt(get_setE).
       wp; skip => /#.
   by wp; skip => />.
-by sim.
++ by sim.
++ by sim.
 qed.
 
 declare axiom F_ll: islossless F.compute.
@@ -187,7 +172,7 @@ proc.
 inline.
 replace * {2} { x } by {
   x;
-  O(F).l();
+  O(F).r();
 }; last first.
 + seq 3 3 : (#pre /\ ={b}); 1: by sim.
   inline.
@@ -198,13 +183,13 @@ replace * {2} { x } by {
     - smt().
     exact F_ll.
   by skip => /#.
-seq 2 2 : (={glob F, glob A} /\ ={cache}(Eager, Lazy) /\ Eager.cache{1} = empty).
+seq 2 2 : (={glob F, glob A, Cache.cache} /\ Cache.cache{1} = empty).
 + by wp; call(: true); auto. 
-transitivity* {1} { O(F).e(); b <@ A(Eager(F)).run(); }.
+transitivity* {1} { O(F).r(); b <@ A(Eager(F)).run(); }.
 + inline.
   sim 2 2.
   conseq />.
-  while (={Eager.cache, glob F} /\ i{1} = i0{2} /\ (forall j, i0 <= j => j \notin Eager.cache){2}).
+  while (={Cache.cache, glob F} /\ i{1} = i0{2} /\ (forall j, i0 <= j => j \notin Cache.cache){2}).
   + rcondt {2} ^if; 1: by auto => /#.
     wp; call (: true).
     auto => />.
