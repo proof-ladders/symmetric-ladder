@@ -2,6 +2,8 @@
 (* Library Building Blocks *)
 (* ------------------------------------------------------- *)
 require import AllCore.
+require        StdOrder.
+        import StdOrder.RealOrder.
 
 (* All libraries have an init and fin function *)
 module type LibBase = {
@@ -54,5 +56,5 @@ proof. by smt(). qed.
 (* Useful for up-to-bad impossible reasoning *)
 lemma abs_eq x y: `|x - y| <= 0%r => x = y.
 proof.
-by move => /normr_le0 /RField.subr_eq0.
+by move=> /normr_le0 /RField.subr_eq0.
 qed.
