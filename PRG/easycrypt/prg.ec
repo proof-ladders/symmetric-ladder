@@ -1,47 +1,47 @@
 require import AllCore List Distr.
 
-type output.
+type t.
 
-op [lossless full uniform] dout : output distr.
+op [lossless full uniform] dt : t distr.
 
-op f : output -> (output * output).
-
-(* 
-
-    PRG 2
-
-*)
+(* PRG 2: a 2-expanding PRG
+   we don't have a concrete realization because we prove the result
+   for every 2-PRG. *)
+(** Syntax: a 2-PRG is a `query` that takes input from a type `t` and
+    outputs two elements of `t` **)
 module type PRG2 = {
-  proc query(s : output) : output * output
+  proc query(s : t) : t * t
 }.
 
-module PRG2r : PRG2 = {
-  proc query(s : output) = {
-    return f s;
-  }
-}.
-
+(** Security: a 2-PRG is secure if its output on a uniformly random
+    element of `t` cannot be distinguished from a uniformly random
+    pair of elements of `t` **)
 module PRG2i : PRG2 = {
-  proc query(s : output) = {
+  proc query(s : t) = {
     var x,y;
     
-    x <$ dout;
-    y <$ dout;
+    x <$ dt;
+    y <$ dt;
     return (x,y);
   }
 }.
 
+(*** This is the type of 2-PRG distinguishers, algorithms that take in
+     two elements of `t` and output a boolean ***)
 module type Dist2 = {
-  proc distinguish(v : output * output) : bool
+  proc distinguish(v : t * t) : bool
 }.
 
+(*** And the experiment, which samples an input from `t`, runs the
+     2-PRG it is parameterized by, then runs a distinguisher on its
+     output. ***)
 module IND_2 (F : PRG2) (D : Dist2) = {
   proc game() : bool = {
     var b; 
     var s;
     var x,y;
     
-    s <$ dout;
+    s <$ dt;
 
     (x,y) <@ F.query(s);
 
@@ -50,48 +50,26 @@ module IND_2 (F : PRG2) (D : Dist2) = {
   }
 }.
 
-(* 
-
-    PRG 3 
-
-*)
+(* 3-PRG: the same, but outputting 3 elements from `t`
+   We could define a generic PRG theory, and instantiate it twice.
+   Do that as an exercise! *)
 module type PRG3 = {
-  proc query(s : output) : output * output * output
-}.
-
-module PRG3r : PRG3 = {
-  proc query(s : output) = {
-    var a,b1,b2,c;
-
-    (a, b1) <- f s;
-    (b2, c) <- f b1;
-    return (a,b2,c);
-  }
-}.
-
-module PRG3h : PRG3 = {
-  proc query(s : output) = {
-    var a,b,c;
-
-    a <$ dout;
-    (b,c) <- f s;
-    return (a,b,c);
-  }
+  proc query(s : t) : t * t * t
 }.
 
 module PRG3i : PRG3 = {
-  proc query(s : output) = {
+  proc query(s : t) = {
     var a,b,c;
     
-    a <$ dout;
-    b <$ dout;
-    c <$ dout;
+    a <$ dt;
+    b <$ dt;
+    c <$ dt;
     return (a,b,c);
   }
 }.
 
 module type Dist3 = {
-  proc distinguish(v : output * output * output) : bool
+  proc distinguish(v : t * t * t) : bool
 }.
 
 module IND_3 (G : PRG3) (D : Dist3) = {
@@ -100,7 +78,7 @@ module IND_3 (G : PRG3) (D : Dist3) = {
     var s;
     var x,y,z;
     
-    s <$ dout;
+    s <$ dt;
 
     (x,y,z) <@ G.query(s);
 
@@ -109,135 +87,126 @@ module IND_3 (G : PRG3) (D : Dist3) = {
   }
 }.
 
-(* 
+(* We now define the construction we want to prove something about
+   (finally): a generic construction that turns any 2-PRG it takes as
+   parameter into a 3-PRG *)
+module PRG3r (P : PRG2) : PRG3 = {
+  proc query(s : t) = {
+    var a,b1,b2,c;
 
-Equivalent games 
+    (a, b1) <@ P.query(s);
+    (b2, c) <@ P.query(b1);
+    return (a,b2,c);
+  }
+}.
 
-*)
-module D2_embed_rh (Drhyb : Dist3) : Dist2 = {
-  (* Embed D2 at the first use of G in real D3 *)
-  proc distinguish(a : output, b1 : output) : bool = {
+print PRG3r.
+
+(* We want to show that for every 2-PRG P, and for every
+   3-Distinguisher D, the advantage of D in distinguishing PRG3r(P)
+   from PRG3i is bounded from above by twice the advantage of R1(P, D)
+   distinguishing P from PRG2i, plus twice the advantage of R2(D)
+   distinguishing P from PRG2i; where R1 and R2 are defined as
+   below. *)
+
+module R1 (P : PRG2) (D : Dist3) : Dist2 = {
+  proc distinguish(a : t, b1 : t) : bool = {
     var b : bool; 
-    var b2,c : output;
+    var b2,c : t;
     
-    (b2, c) <- f b1;
-    b <@ Drhyb.distinguish(a,b2,c);
+    (b2, c) <@ P.query(b1);
+    b <@ D.distinguish(a,b2,c);
 
     return b;
   }
 }.
 
-module D2_embed_hi (Drhyb : Dist3) : Dist2 = {
-  (* Embed D2 at the second use of G in hybrid D3 *)
-  proc distinguish(b1 : output, c : output) : bool = {
+print R1.
+
+module R2 (D : Dist3) : Dist2 = {
+  proc distinguish(b1 : t, c : t) : bool = {
     var b : bool; 
-    var a : output;
+    var a : t;
     
-    a <$ dout;
-    b <@ Drhyb.distinguish(a,b1,c);
+    a <$ dt;
+    b <@ D.distinguish(a,b1,c);
 
     return b;
   }
 }.
 
-(* 
+print R2.
 
-    Proofs
-
-*)
+(* The rest of the file is the proof analyzing the relation between
+   advantages. *)
 section PROOFS.
-  declare module D3 <: Dist3.
+  (** The section allows us to quantify over P and D once, and be able
+      to use them everywhere. The following are universal
+      quantifications. **)
+  declare module P <: PRG2.
+  declare module D <: Dist3 { -P (*** In EasyCrypt, all modules can
+                                      access all memory; we prove
+                                      security only against distinguishers
+                                      that can't share memory with P ***) }.
 
-  local lemma eq_D3r_D2r &m : 
-      Pr[IND_3(PRG3r, D3).game() @ &m : res]
-      =
-      Pr[IND_2(PRG2r, D2_embed_rh(D3)).game() @ &m : res].
+  (* In this proof, we're just going to "walk" the advantage from one
+     side to the other *)
+  local lemma eqpr_IND3PRG3PD_IND2PRG2R1 &m:
+      Pr[IND_3(PRG3r(P), D).game() @ &m : res]
+    = Pr[IND_2(P, R1(P, D)).game() @ &m : res].
   proof.
-    byequiv (_ : ={glob D3} ==> ={res}); trivial.
-    proc.
-    inline *.
-    wp.
-    call (_ : true).
-    auto.
+  byequiv (: ={glob D, glob P} ==> ={res})=> //.
+  (* Here, the proof is literally by inlining *)
+  by proc; inline *; sim.
   qed.
 
-  local lemma eq_D3h_D2i &m :
-      Pr[IND_3(PRG3h, D3).game() @ &m : res]
-      =
-      Pr[IND_2(PRG2i, D2_embed_rh(D3)).game() @ &m : res].
+  (* Advantage of R1(P, D) in distinguishing P from PRG2i *)
+
+  local lemma eqpr_IND2PRG2iR1_IND2PRG2R2 &m:
+      Pr[IND_2(PRG2i, R1(P, D)).game() @ &m : res]
+    = Pr[IND_2(P, R2(D)).game() @ &m : res].
   proof.
-    byequiv (_ : ={glob D3} ==> ={res}); trivial.
-    proc.
-    inline *.
-    wp.
-    swap {2} 3 1.
-    call (_ : true).
-    auto.
+  byequiv (: ={glob D, glob P} ==> ={res})=> //.
+  proc; inline *; sim.
+  (* Inlining is not enough: we need to swap some statements to align
+     the random samplings. *)
+  swap {2} [2..4] 1.
+  wp; sim.
+  swap {2} 1 1.
+  by sim; auto.
   qed.
 
-  local lemma eq_D3h_D2r &m :
-      Pr[IND_3(PRG3h, D3).game() @ &m : res]
-      =
-      Pr[IND_2(PRG2r, D2_embed_hi(D3)).game() @ &m : res].
-  proof.
-    byequiv (_ : ={glob D3} ==> ={res}); trivial.
-    proc.
-    inline *.
-    wp.
-    call (_ : true).
-    auto.
-  qed.
+  (* Advantage of R2(D) in distinguishing P from PRG2i *)
 
-  local lemma eq_D3i_D2i &m :
-      Pr[IND_3(PRG3i, D3).game() @ &m : res]
-      =
-      Pr[IND_2(PRG2i, D2_embed_hi(D3)).game() @ &m : res].
+  local lemma eqpr_IND2PRG2iR2_IND3PRG3iD &m:
+      Pr[IND_2(PRG2i, R2(D)).game() @ &m : res]
+    = Pr[IND_3(PRG3i, D).game() @ &m : res].
   proof.
-    byequiv (_ : ={glob D3} ==> ={res}); trivial.
-    proc.
-    inline *.
-    swap {2} 8 -5.
-    wp.
-    call (_ : true).
-    auto.
+  byequiv (: ={glob D} ==> ={res})=> //.
+  proc; inline *.
+  swap {1} 8 -5.
+  by sim.
   qed.
-  
+ 
+  (* Note how this lemma is not local; it will leave the section when
+     we close it *)
+  lemma main_result &m : 
+       `|  Pr[IND_3(PRG3r(P), D).game() @ &m : res]
+         - Pr[IND_3(PRG3i, D).game() @ &m : res]    |
+    <=   `|  Pr[IND_2(P, R1(P, D)).game() @ &m : res]
+           - Pr[IND_2(PRG2i, R1(P, D)).game() @ &m : res] |
+       + `|  Pr[IND_2(P, R2(D)).game() @ &m : res]
+           - Pr[IND_2(PRG2i, R2(D)).game() @ &m : res] |.
+  proof.
+  (* We just "walk" the advantage as planned, and conclude with the
+     triangle inequality *)
+  rewrite eqpr_IND3PRG3PD_IND2PRG2R1.
+  rewrite eqpr_IND2PRG2iR1_IND2PRG2R2.
+  rewrite eqpr_IND2PRG2iR2_IND3PRG3iD.
+  exact: StdOrder.RealOrder.ler_dist_add.
+  qed.
+end section PROOFS.
 
-  local lemma adv_D3rh_is_D2 &m : 
-      `|Pr[IND_3(PRG3r, D3).game() @ &m : res] -
-      Pr[IND_3(PRG3h, D3).game() @ &m : res]|
-      =
-      `|Pr[IND_2(PRG2r, D2_embed_rh(D3)).game() @ &m : res] -
-      Pr[IND_2(PRG2i, D2_embed_rh(D3)).game() @ &m : res] |.
-  proof.
-    rewrite eq_D3r_D2r.
-    rewrite eq_D3h_D2i.
-    reflexivity.
-  qed.
-
-  local lemma adv_D3hi_is_D2 &m : 
-      `| Pr[IND_3(PRG3h, D3).game() @ &m : res] -
-      Pr[IND_3(PRG3i, D3).game() @ &m : res] |
-      =
-      `| Pr[IND_2(PRG2r, D2_embed_hi(D3)).game() @ &m : res] -
-      Pr[IND_2(PRG2i, D2_embed_hi(D3)).game() @ &m : res] |.
-  proof.
-    rewrite eq_D3h_D2r.
-    rewrite eq_D3i_D2i.
-    reflexivity.
-  qed.
-  
-  lemma D3_adv_2D2 &m : 
-      `|Pr[IND_3(PRG3r, D3).game() @ &m : res] -
-      Pr[IND_3(PRG3h, D3).game() @ &m : res]|
-      +
-      `| Pr[IND_3(PRG3h, D3).game() @ &m : res] -
-      Pr[IND_3(PRG3i, D3).game() @ &m : res] |
-      =
-      2%r *
-      `| Pr[IND_2(PRG2i, D2_embed_hi(D3)).game() @ &m : res] -
-      Pr[IND_2(PRG2r, D2_embed_hi(D3)).game() @ &m : res] |.
-  proof.
-    rewrite adv_D3hi_is_D2.
-    rewrite adv_D3rh_is_D2.
-  admitted.
+(* And note in what the below outputs: `main_result` is now
+   universally quantified over P and D with the stated restrictions *)
+print main_result.
