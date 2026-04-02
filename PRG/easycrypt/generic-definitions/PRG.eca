@@ -1,0 +1,66 @@
+(*^ This file defines the syntax and security of Pseudo-Random
+    Generators (PRGs).
+
+    Security is indistinguishability from sampling in some arbitrary
+    distribution, and we keep the real and ideal experiment separate
+    to allow explicit consideration of seed generation.
+
+    Seed generation and PRG operation are both modelled as procedures,
+    which can be stateful and probabilistic. This allows, in general,
+    broader applicability of the results than modelling them as
+    stateless and deterministic; even if most applications will be to
+    stateless and deterministic algorithms.
+^*)
+require import AllCore Distr.
+
+(*^ We start by abstractly defining the syntax and security of
+    PRGs. This exists in a slightly more complex form in the EasyCrypt
+    standard library, but we aim for a self-contained result here. ^*)
+
+(*& A PRG with seed type `seed` and output type `output` is ... &*)
+type seed, output.
+
+(*& ... a pair of (stateful, probabilistic) algorithms:
+    - SGen(): which outputs seeds; and
+    - Query(): which, given a seed, outputs an output. &*)
+module type PRG = {
+  proc sgen(): seed
+  proc query(s: seed): output
+}.
+
+(*& We want PRGs whose outputs are indistinguishable (when a seed
+    output by sgen is fed in) from sampling in some distribution over
+    the outputs. &*)
+op dout : output distr.
+
+(*& Distinguishers are (stateful, probabilistic) algorithms that
+    output a bit when given the output of a PRG or a sampling in
+    dout. &*)
+module type Dist = {
+  proc distinguish(v : output): bool
+}.
+
+(*& We can then define the two sides of the experiment: the real side
+    gives the distinguisher the output of a PRG while the ideal side
+    gives the distinguisher a sample in dout. &*)
+module IND_real (P : PRG) (D : Dist) = {
+  proc game() = {
+    var s, x, b;
+
+    s <@ P.sgen();
+    x <@ P.query(s);
+    b <@ D.distinguish(x);
+    return b;
+  }
+}.
+
+module IND_ideal (D : Dist) = {
+  proc game() = {
+    var x, b;
+
+    x <$ dout;
+    b <@ D.distinguish(x);
+    return b;
+  }
+}.
+
