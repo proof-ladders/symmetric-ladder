@@ -41,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [prg-std]
+        target: [prg-pure, prg-modular]
     steps:
     - uses: actions/checkout@v4
     - name: Install and Setup EasyCrypt
